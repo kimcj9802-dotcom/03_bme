@@ -1,0 +1,4 @@
+node_modules/
+data/uploads/
+data/vector_store.json
+.env

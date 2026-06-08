@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>관리자 - 의료기기 메뉴얼 관리</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    background: #f0f4f8;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #2c3e50;
+    color: white;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+
+  header .left { display: flex; align-items: center; gap: 10px; }
+  header .title { font-size: 17px; font-weight: 700; }
+  header .subtitle { font-size: 12px; opacity: 0.75; margin-top: 2px; }
+
+  .logout-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.4);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+  .logout-btn:hover { background: rgba(255,255,255,0.15); }
+
+  /* 로그인 오버레이 */
+  #login-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .login-box {
+    background: white;
+    border-radius: 12px;
+    padding: 32px;
+    width: 320px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+
+  .login-box h2 { font-size: 18px; margin-bottom: 6px; color: #2c3e50; }
+  .login-box p { font-size: 13px; color: #666; margin-bottom: 20px; }
+
+  .login-box input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #cdd5de;
+    border-radius: 8px;
+    font-size: 15px;
+    margin-bottom: 12px;
+    outline: none;
+  }
+
+  .login-box input:focus { border-color: #2c3e50; }
+
+  .login-btn {
+    width: 100%;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    padding: 11px;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+
+  .login-btn:hover { background: #1a252f; }
+  .login-error { color: #e53935; font-size: 13px; margin-top: 8px; display: none; }
+
+  /* 메인 콘텐츠 */
+  main { max-width: 900px; margin: 0 auto; padding: 28px 20px; }
+
+  .section {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  }
+
+  .section h2 { font-size: 16px; color: #2c3e50; margin-bottom: 16px; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+
+  /* 업로드 영역 */
+  #drop-zone {
+    border: 2px dashed #bdc3c7;
+    border-radius: 10px;
+    padding: 36px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+  }
+
+  #drop-zone.drag-over { border-color: #2c3e50; background: #f8fafc; }
+  #drop-zone .icon { font-size: 36px; margin-bottom: 10px; }
+  #drop-zone p { color: #666; font-size: 14px; }
+  #drop-zone strong { color: #2c3e50; }
+  #file-input { display: none; }
+
+  .upload-form-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .upload-form-row input {
+    flex: 1;
+    padding: 9px 14px;
+    border: 1px solid #cdd5de;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+  }
+
+  .upload-form-row input:focus { border-color: #2c3e50; }
+
+  .btn-primary {
+    background: #2c3e50;
+    color: white;
+    border: none;
+    padding: 9px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+
+  .btn-primary:hover { background: #1a252f; }
+  .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+
+  /* 진행 상태 */
+  #progress-area { display: none; margin-top: 12px; }
+
+  .progress-bar-wrap {
+    height: 6px;
+    background: #ecf0f1;
+    border-radius: 3px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: #27ae60;
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.4s;
+    animation: progress-pulse 1.5s infinite;
+  }
+
+  @keyframes progress-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  #progress-text { font-size: 13px; color: #555; }
+
+  .alert {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-top: 10px;
+    display: none;
+  }
+
+  .alert.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+  .alert.error { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+
+  /* 문서 목록 */
+  #doc-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .doc-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border: 1px solid #e8ecf0;
+    border-radius: 10px;
+    background: #fafbfc;
+    transition: background 0.1s;
+  }
+
+  .doc-card:hover { background: #f0f4f8; }
+
+  .doc-info .doc-name { font-size: 15px; font-weight: 600; color: #2c3e50; }
+  .doc-info .doc-meta { font-size: 12px; color: #888; margin-top: 3px; }
+
+  .btn-delete {
+    background: transparent;
+    border: 1px solid #e74c3c;
+    color: #e74c3c;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .btn-delete:hover { background: #e74c3c; color: white; }
+
+  .empty-state {
+    text-align: center;
+    padding: 32px;
+    color: #aaa;
+    font-size: 14px;
+  }
+
+  .badge {
+    display: inline-block;
+    background: #e8f4fd;
+    color: #1a6fa8;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-left: 8px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- 로그인 오버레이 -->
+<div id="login-overlay">
+  <div class="login-box">
+    <h2>🔒 관리자 로그인</h2>
+    <p>의료기기 메뉴얼 관리 페이지입니다.</p>
+    <input type="password" id="pw-input" placeholder="비밀번호 입력"
+      onkeydown="if(event.key==='Enter') login()">
+    <button class="login-btn" onclick="login()">로그인</button>
+    <div class="login-error" id="login-error">비밀번호가 틀렸습니다.</div>
+  </div>
+</div>
+
+<header>
+  <div class="left">
+    <div>
+      <div class="title">⚙️ 메뉴얼 관리자</div>
+      <div class="subtitle">의료기기 서비스 메뉴얼 업로드 · 관리</div>
+    </div>
+  </div>
+  <div style="display:flex; gap:12px; align-items:center;">
+    <a href="/" style="color:rgba(255,255,255,0.8); font-size:13px; text-decoration:none;">← 챗봇으로</a>
+    <button class="logout-btn" onclick="logout()">로그아웃</button>
+  </div>
+</header>
+
+<main>
+  <!-- PDF 업로드 -->
+  <div class="section">
+    <h2>📄 PDF 메뉴얼 업로드</h2>
+
+    <div id="drop-zone" onclick="document.getElementById('file-input').click()"
+      ondragover="e=>{e.preventDefault();this.classList.add('drag-over')}"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="handleDrop(event)">
+      <div class="icon">📂</div>
+      <p><strong>클릭하거나 PDF를 여기로 드래그</strong></p>
+      <p style="margin-top:6px; font-size:12px;">최대 50MB · PDF 파일만 지원</p>
+    </div>
+
+    <input type="file" id="file-input" accept=".pdf" onchange="handleFileSelect(event)">
+
+    <div class="upload-form-row">
+      <input type="text" id="doc-name" placeholder="장비명 (예: DAIWHA DI-2200 수액펌프)">
+      <button class="btn-primary" id="upload-btn" onclick="uploadPdf()" disabled>업로드</button>
+    </div>
+
+    <div id="progress-area">
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+      <div id="progress-text">처리 중...</div>
+    </div>
+
+    <div class="alert" id="upload-alert"></div>
+  </div>
+
+  <!-- 등록된 문서 목록 -->
+  <div class="section">
+    <h2>📚 등록된 메뉴얼 <span id="doc-count" class="badge">0</span></h2>
+    <div id="doc-list"><div class="empty-state">등록된 메뉴얼이 없습니다.</div></div>
+  </div>
+</main>
+
+<script>
+  let adminToken = '';
+  let selectedFile = null;
+
+  // ── 인증 ──────────────────────────────────────────────────────────────
+
+  async function login() {
+    const pw = document.getElementById('pw-input').value;
+    const res = await fetch('/admin/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    if (res.ok) {
+      adminToken = pw;
+      document.getElementById('login-overlay').style.display = 'none';
+      loadDocuments();
+    } else {
+      document.getElementById('login-error').style.display = 'block';
+    }
+  }
+
+  function logout() {
+    adminToken = '';
+    document.getElementById('login-overlay').style.display = 'flex';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('login-error').style.display = 'none';
+  }
+
+  // ── 파일 선택 ──────────────────────────────────────────────────────────
+
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+  }
+
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) setFile(file);
+  }
+
+  function setFile(file) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      showAlert('error', 'PDF 파일만 업로드 가능합니다.');
+      return;
+    }
+    selectedFile = file;
+    // 파일명에서 장비명 자동 제안
+    const nameInput = document.getElementById('doc-name');
+    if (!nameInput.value) {
+      nameInput.value = file.name.replace(/\.pdf$/i, '');
+    }
+    document.getElementById('drop-zone').querySelector('strong').textContent = `선택됨: ${file.name}`;
+    document.getElementById('upload-btn').disabled = false;
+    hideAlert();
+  }
+
+  // ── 업로드 ─────────────────────────────────────────────────────────────
+
+  async function uploadPdf() {
+    if (!selectedFile) return;
+
+    const docName = document.getElementById('doc-name').value.trim() || selectedFile.name;
+    const uploadBtn = document.getElementById('upload-btn');
+    const progressArea = document.getElementById('progress-area');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+
+    uploadBtn.disabled = true;
+    progressArea.style.display = 'block';
+    progressBar.style.width = '10%';
+    progressText.textContent = '업로드 중...';
+    hideAlert();
+
+    const formData = new FormData();
+    formData.append('pdf', selectedFile);
+    formData.append('docName', docName);
+
+    try {
+      const res = await fetch('/admin/upload', {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken },
+        body: formData,
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const steps = ['PDF 텍스트 추출', '청킹', '임베딩', '저장'];
+      let step = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = JSON.parse(line.slice(6));
+
+          if (data.status) {
+            progressText.textContent = data.status;
+            step = Math.min(step + 1, steps.length);
+            progressBar.style.width = `${(step / steps.length) * 85 + 10}%`;
+          } else if (data.done) {
+            progressBar.style.width = '100%';
+            progressText.textContent = '완료!';
+            showAlert('success', `✅ "${data.docName}" 업로드 완료 (${data.chunkCount}개 청크 생성)`);
+            resetUploadForm();
+            loadDocuments();
+          } else if (data.error) {
+            showAlert('error', `❌ ${data.error}`);
+            progressArea.style.display = 'none';
+          }
+        }
+      }
+    } catch {
+      showAlert('error', '업로드 중 오류가 발생했습니다.');
+      progressArea.style.display = 'none';
+    }
+
+    uploadBtn.disabled = false;
+  }
+
+  function resetUploadForm() {
+    selectedFile = null;
+    document.getElementById('file-input').value = '';
+    document.getElementById('doc-name').value = '';
+    document.getElementById('drop-zone').querySelector('strong').textContent = '클릭하거나 PDF를 여기로 드래그';
+    document.getElementById('upload-btn').disabled = true;
+    setTimeout(() => { document.getElementById('progress-area').style.display = 'none'; }, 2000);
+  }
+
+  // ── 문서 목록 ──────────────────────────────────────────────────────────
+
+  async function loadDocuments() {
+    const res = await fetch('/admin/documents', {
+      headers: { 'x-admin-token': adminToken },
+    });
+    const docs = await res.json();
+    renderDocuments(docs);
+  }
+
+  function renderDocuments(docs) {
+    const list = document.getElementById('doc-list');
+    document.getElementById('doc-count').textContent = docs.length;
+
+    if (docs.length === 0) {
+      list.innerHTML = '<div class="empty-state">등록된 메뉴얼이 없습니다.</div>';
+      return;
+    }
+
+    list.innerHTML = docs.map(doc => `
+      <div class="doc-card" id="doc-${doc.id}">
+        <div class="doc-info">
+          <div class="doc-name">📄 ${doc.name}</div>
+          <div class="doc-meta">
+            ${new Date(doc.uploadedAt).toLocaleString('ko-KR')} · ${doc.chunkCount}개 청크
+          </div>
+        </div>
+        <button class="btn-delete" onclick="deleteDoc('${doc.id}', '${doc.name.replace(/'/g, "\\'")}')">삭제</button>
+      </div>
+    `).join('');
+  }
+
+  async function deleteDoc(docId, docName) {
+    if (!confirm(`"${docName}"을(를) 삭제하시겠습니까?\n삭제하면 해당 메뉴얼로 답변할 수 없습니다.`)) return;
+
+    await fetch(`/admin/documents/${docId}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-token': adminToken },
+    });
+    loadDocuments();
+  }
+
+  // ── 알림 ───────────────────────────────────────────────────────────────
+
+  function showAlert(type, msg) {
+    const el = document.getElementById('upload-alert');
+    el.className = `alert ${type}`;
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function hideAlert() {
+    document.getElementById('upload-alert').style.display = 'none';
+  }
+</script>
+</body>
+</html>
