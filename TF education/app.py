@@ -86,6 +86,12 @@ SYSTEM_PROMPT = (
     "환자 연결 상태에서는 점검하지 마세요. 의심 시 제조사 서비스에 요청하세요.'"
 )
 
+VIBE_SYSTEM_PROMPT = (
+    "너는 의료기기 수리 전문 도우미다. "
+    "제공된 참고 자료 없이 모델 자체 지식으로 한국어로 자유롭게 답한다. "
+    "답변 끝에 '⚡ 바이브 모드: 검색 없이 모델 지식으로 답변'이라고 명시한다."
+)
+
 RECALL_SYSTEM_PROMPT = (
     "아래 [리콜대조결과]에 적힌 숫자와 로트만 인용해 한국어로 한두 줄로 답하라. "
     "결과에 없는 로트·건수를 지어내지 마라."
@@ -217,9 +223,30 @@ async def chat(req: ChatRequest):
             yield chunk
 
     async def sse_bare():
-        # ── 바이브 모드: 검색 없이 모델만 직접 호출, 출처 없음 ────────────
-        async for chunk in stream_ollama(req.question, ""):
-            yield chunk
+        # ── 바이브 모드: 별도 시스템 프롬프트로 모델 자체 지식 사용 ────────
+        payload = {
+            "model": MODEL,
+            "stream": True,
+            "messages": [
+                {"role": "system", "content": VIBE_SYSTEM_PROMPT},
+                {"role": "user",   "content": req.question},
+            ],
+        }
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream("POST", OLLAMA_URL, json=payload) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    try:
+                        data  = json.loads(line)
+                        token = data.get("message", {}).get("content", "")
+                        if token:
+                            yield f"data: {json.dumps({'token': token})}\n\n"
+                        if data.get("done"):
+                            yield "data: [DONE]\n\n"
+                    except json.JSONDecodeError:
+                        continue
 
     sse_gen = sse_bare() if req.bare else sse_harness()
     return StreamingResponse(
