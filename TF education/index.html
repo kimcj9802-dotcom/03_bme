@@ -156,6 +156,31 @@
   }
   #clear-btn:hover { background: #f0f0f0; color: #444; }
 
+  /* 리콜 대조 */
+  .recall-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 600px) { .recall-grid { grid-template-columns: 1fr; } }
+  .recall-grid label { font-size: .75rem; font-weight: 600; color: #555; display: block; margin-bottom: 4px; }
+  .recall-grid textarea { min-height: 120px; font-size: .8rem; }
+  #recall-btn {
+    margin-top: 12px;
+    background: #1a6b3a;
+  }
+  #recall-btn:hover:not(:disabled) { background: #145730; }
+  .source-chip {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: .75rem;
+    padding: 3px 10px;
+    border: 1px solid #1a6b3a;
+    border-radius: 12px;
+    color: #1a6b3a;
+    background: #edf7f1;
+  }
+
   /* 빠른 질문 칩 */
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .chip {
@@ -215,6 +240,27 @@
     <button id="send-btn" style="margin-top:14px;" onclick="sendQuestion()">질문하기</button>
   </div>
 
+  <!-- 리콜 대조 -->
+  <div class="card">
+    <div class="card-label">리콜 대조</div>
+    <div class="recall-grid">
+      <div>
+        <label>보유 기기 목록 (JSON)</label>
+        <textarea id="recall-inventory">[
+  {"model":"DI-2200P","lot":"L2401"},
+  {"model":"DI-2200P","lot":"L2402"}
+]</textarea>
+      </div>
+      <div>
+        <label>리콜 공지 목록 (JSON)</label>
+        <textarea id="recall-notice">[
+  {"model":"DI-2200P","lot":"L2401","reason":"압력센서 결함"}
+]</textarea>
+      </div>
+    </div>
+    <button id="recall-btn" onclick="runRecallCheck()">리콜 대조 실행</button>
+  </div>
+
   <!-- 답변 -->
   <div class="card">
     <div class="answer-header">
@@ -222,6 +268,7 @@
       <button id="clear-btn" onclick="clearAnswer()">지우기</button>
     </div>
     <div id="answer-box" class="empty">답변이 여기에 표시됩니다.</div>
+    <div id="source-chip" style="display:none;" class="source-chip">근거: /api/recall-check 코드 계산값</div>
   </div>
 
 </main>
@@ -378,6 +425,90 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
   document.getElementById("question").addEventListener("keydown", e => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendQuestion();
   });
+
+  // ── 리콜 대조 ─────────────────────────────────────────────────────
+  async function runRecallCheck() {
+    let inventory, recallNotice;
+    try {
+      inventory    = JSON.parse(document.getElementById("recall-inventory").value);
+      recallNotice = JSON.parse(document.getElementById("recall-notice").value);
+    } catch {
+      alert("JSON 형식이 올바르지 않습니다. 입력값을 확인해 주세요.");
+      return;
+    }
+
+    const recallBtn  = document.getElementById("recall-btn");
+    const sourceChip = document.getElementById("source-chip");
+
+    recallBtn.disabled = true;
+    sourceChip.style.display = "none";
+    answerBox.className = "streaming";
+    answerBox.innerHTML = '<span class="cursor"></span>';
+
+    let accumulated = "";
+
+    try {
+      const res = await fetch(BE + "/api/recall-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inventory, recall_notice: recallNotice }),
+      });
+
+      if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let   buffer  = "";
+      let   metaInfo = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const raw = line.slice(5).trim();
+          if (raw === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed.type === "meta") {
+              // 파이썬 계산값 — 모델이 아닌 코드가 낸 확정값
+              metaInfo = parsed;
+            } else {
+              const token = parsed.token || "";
+              accumulated += token;
+              answerBox.innerHTML =
+                accumulated.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                + '<span class="cursor"></span>';
+            }
+          } catch { /* 파싱 실패 무시 */ }
+        }
+      }
+
+      answerBox.textContent = accumulated || "응답 없음";
+      answerBox.className = "";
+      // 출처 칩: 계산 요약도 함께 표시
+      if (metaInfo) {
+        sourceChip.textContent =
+          `근거: /api/recall-check 코드 계산값 — ` +
+          `대상 ${metaInfo.matched}건(${metaInfo.matched_lots.join(", ") || "없음"}), ` +
+          `대상 아님 ${metaInfo.safe}건(${metaInfo.safe_lots.join(", ") || "없음"})`;
+      }
+      sourceChip.style.display = "inline-block";
+
+    } catch (err) {
+      answerBox.textContent = "오류: " + err.message;
+      answerBox.className = "err-state";
+      dot.className = "err";
+      statusText.textContent = "요청 실패";
+    } finally {
+      recallBtn.disabled = false;
+    }
+  }
 </script>
 
 </body>

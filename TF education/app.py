@@ -46,9 +46,31 @@ SYSTEM_PROMPT = (
 )
 
 
+RECALL_SYSTEM_PROMPT = (
+    "아래 [리콜대조결과]에 적힌 숫자와 로트만 인용해 한국어로 한두 줄로 답하라. "
+    "결과에 없는 로트·건수를 지어내지 마라."
+)
+
+
 class ChatRequest(BaseModel):
     question: str
     context: str
+
+
+class DeviceItem(BaseModel):
+    model: str
+    lot: str
+
+
+class RecallItem(BaseModel):
+    model: str
+    lot: str
+    reason: str
+
+
+class RecallCheckRequest(BaseModel):
+    inventory: list[DeviceItem]
+    recall_notice: list[RecallItem]
 
 
 async def stream_ollama(question: str, context: str):
@@ -79,6 +101,90 @@ async def stream_ollama(question: str, context: str):
                         yield "data: [DONE]\n\n"
                 except json.JSONDecodeError:
                     continue
+
+
+async def stream_recall(context: str):
+    """리콜 대조 결과(context)를 모델에 넘겨 자연어 요약을 SSE로 스트리밍."""
+    payload = {
+        "model": MODEL,
+        "stream": True,
+        "messages": [
+            {"role": "system", "content": RECALL_SYSTEM_PROMPT},
+            {"role": "user", "content": context},
+        ],
+    }
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        async with client.stream("POST", OLLAMA_URL, json=payload) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    token = data.get("message", {}).get("content", "")
+                    if token:
+                        yield f"data: {json.dumps({'token': token})}\n\n"
+                    if data.get("done"):
+                        yield "data: [DONE]\n\n"
+                except json.JSONDecodeError:
+                    continue
+
+
+@app.post("/api/recall-check")
+async def recall_check(req: RecallCheckRequest):
+    # ── 1. 파이썬이 직접 매칭 계산 (모델에게 시키지 않음) ──────────────
+    recall_keys: dict[tuple[str, str], str] = {
+        (r.model.strip(), r.lot.strip()): r.reason.strip()
+        for r in req.recall_notice
+    }
+
+    matched, unmatched = [], []
+    for item in req.inventory:
+        key = (item.model.strip(), item.lot.strip())
+        if key in recall_keys:
+            matched.append({"model": item.model, "lot": item.lot,
+                            "reason": recall_keys[key]})
+        else:
+            unmatched.append({"model": item.model, "lot": item.lot})
+
+    total   = len(req.inventory)
+    n_match = len(matched)
+    n_safe  = len(unmatched)
+
+    # ── 2. 결정론적 결과를 컨텍스트로 구성 ────────────────────────────
+    matched_lots  = ", ".join(f"{m['lot']}({m['reason']})" for m in matched)  \
+                    or "없음"
+    unmatched_lots = ", ".join(u["lot"] for u in unmatched) or "없음"
+
+    context = (
+        f"[리콜대조결과]\n"
+        f"전체 보유 기기: {total}건\n"
+        f"리콜 대상: {n_match}건 — 로트 {matched_lots}\n"
+        f"대상 아님: {n_safe}건 — 로트 {unmatched_lots}\n"
+        f"(이 숫자와 로트는 파이썬 코드가 계산한 확정값임)"
+    )
+
+    # ── 3. 계산 요약을 SSE meta 이벤트로 먼저 전송, 이후 모델 스트리밍 ─
+    async def stream_with_meta():
+        # 프론트가 계산값을 직접 읽을 수 있도록 첫 이벤트로 전달
+        meta = {
+            "type": "meta",
+            "total": total,
+            "matched": n_match,
+            "safe": n_safe,
+            "matched_lots": [m["lot"] for m in matched],
+            "safe_lots":    [u["lot"] for u in unmatched],
+        }
+        yield f"data: {json.dumps(meta, ensure_ascii=False)}\n\n"
+        # 이후 모델 자연어 요약 스트리밍
+        async for chunk in stream_recall(context):
+            yield chunk
+
+    return StreamingResponse(
+        stream_with_meta(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/chat")
