@@ -221,9 +221,21 @@
     border-radius: 0 6px 6px 0;
     font-size: .78rem;
     color: #1a3a6b;
-    line-height: 1.6;
+    line-height: 2;
   }
   #sources-box strong { font-weight: 700; }
+  .src-chip {
+    display: inline-block;
+    background: #fff;
+    border: 1px solid #a8c0e0;
+    border-radius: 12px;
+    padding: 1px 10px;
+    margin: 2px 4px 2px 0;
+    font-size: .75rem;
+    color: #0d3b6e;
+    white-space: nowrap;
+  }
+  .src-chip em { font-style: normal; color: #5580b0; }
 
   /* 빠른 질문 칩 */
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
@@ -454,15 +466,16 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
           if (!line.startsWith("data:")) continue;
           const raw = line.slice(5).trim();
           if (raw === "[DONE]") break;
+          if (raw === "[DONE]") continue;   // [DONE] 이후 같은 청크에 sources 있을 수 있으므로 continue
           try {
             const parsed = JSON.parse(raw);
-            if (parsed.type === "sources") {
-              // 하네스 모드 출처 표시
-              const list = parsed.titles.map(t => `• ${t}`).join("<br>");
-              sourcesBox.innerHTML = `<strong>📎 검색 출처</strong><br>${list}`;
+            if (parsed.sources) {
+              // 토큰 스트림 끝에 오는 출처 이벤트
+              const chips = parsed.sources.map(s =>
+                `<span class="src-chip">${s.title}${s.page ? ' <em>(' + s.page + ')</em>' : ''}</span>`
+              ).join(" ");
+              sourcesBox.innerHTML = `<strong>📎 근거</strong>&nbsp; ${chips}`;
               sourcesBox.style.display = "block";
-            } else if (parsed.type === "meta") {
-              // recall-check meta — 무시(sendQuestion과 공유 안 함)
             } else {
               const token = parsed.token ?? "";
               accumulated += token;

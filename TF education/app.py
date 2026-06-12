@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import re
 import httpx
 import json
 import numpy as np
@@ -124,30 +125,38 @@ async def ensure_doc_embeddings() -> np.ndarray:
     return _doc_embeddings
 
 
-async def retrieve(question: str, top_k: int = TOP_K) -> tuple[list[str], list[str]]:
+def _parse_source(first_line: str) -> dict:
+    """'N) 조각명 — p.OO' 형태의 첫 줄에서 title과 page를 분리."""
+    m = re.match(r'^\d+\)\s*(.+?)\s*[—-]+\s*(p\.\d+)', first_line)
+    if m:
+        return {"title": m.group(1).strip(), "page": m.group(2).strip()}
+    # 패턴 불일치 시 원본 전체를 title로
+    return {"title": first_line.strip(), "page": ""}
+
+
+async def retrieve(question: str, top_k: int = TOP_K) -> tuple[list[str], list[dict]]:
     """코사인 유사도 상위 top_k 조각을 반환.
     SIM_THRESHOLD 미만 조각은 제외하되, 최상위 1개는 임계값 무관하게 항상 포함.
-    (자료 존재 여부의 최종 판단은 시스템 프롬프트·모델이 담당)
+    반환: (chunks, sources) — sources = [{"title": ..., "page": ...}, ...]
     """
     doc_vecs = await ensure_doc_embeddings()
     q_vec    = await embed(question)
     sims     = [cosine_sim(q_vec, dv) for dv in doc_vecs]
 
-    # 점수 높은 순 정렬
     ranked = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)
 
     selected = []
     for rank, idx in enumerate(ranked):
         if rank == 0:
-            selected.append(idx)           # 최상위는 임계값 무관 항상 포함
+            selected.append(idx)
         elif sims[idx] >= SIM_THRESHOLD:
-            selected.append(idx)           # 임계값 이상만 추가
+            selected.append(idx)
         if len(selected) >= top_k:
             break
 
-    chunks = [DOCS[i] for i in selected]
-    titles = [DOCS[i].splitlines()[0] for i in selected]
-    return chunks, titles
+    chunks  = [DOCS[i] for i in selected]
+    sources = [_parse_source(DOCS[i].splitlines()[0]) for i in selected]
+    return chunks, sources
 
 
 # ── Pydantic 모델 ─────────────────────────────────────────────────────
@@ -175,6 +184,7 @@ class RecallCheckRequest(BaseModel):
 
 # ── 스트리밍 헬퍼 ─────────────────────────────────────────────────────
 async def stream_ollama(question: str, context: str):
+    """토큰만 흘림 — [DONE] 은 호출부에서 발행 (sources 이벤트 순서 제어 목적)."""
     payload = {
         "model": MODEL,
         "stream": True,
@@ -194,13 +204,13 @@ async def stream_ollama(question: str, context: str):
                     token = data.get("message", {}).get("content", "")
                     if token:
                         yield f"data: {json.dumps({'token': token})}\n\n"
-                    if data.get("done"):
-                        yield "data: [DONE]\n\n"
+                    # done 플래그는 여기서 처리하지 않음 — 호출부에서 [DONE] 발행
                 except json.JSONDecodeError:
                     continue
 
 
 async def stream_recall(context: str):
+    """토큰만 흘림 — [DONE] 은 호출부에서 발행."""
     payload = {
         "model": MODEL,
         "stream": True,
@@ -220,8 +230,6 @@ async def stream_recall(context: str):
                     token = data.get("message", {}).get("content", "")
                     if token:
                         yield f"data: {json.dumps({'token': token})}\n\n"
-                    if data.get("done"):
-                        yield "data: [DONE]\n\n"
                 except json.JSONDecodeError:
                     continue
 
@@ -230,16 +238,16 @@ async def stream_recall(context: str):
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     async def sse_harness():
-        # ── 하네스 모드: RAG 검색 → sources 이벤트 → 모델 스트리밍 ──────
-        chunks, titles = await retrieve(req.question, top_k=TOP_K)
+        # 토큰 → sources 이벤트 → [DONE]  (이 순서를 지켜야 프론트가 sources를 읽음)
+        chunks, sources = await retrieve(req.question, top_k=TOP_K)
         context = "\n\n".join(chunks)
-        sources_event = {"type": "sources", "titles": titles}
-        yield f"data: {json.dumps(sources_event, ensure_ascii=False)}\n\n"
         async for chunk in stream_ollama(req.question, context):
             yield chunk
+        yield f"data: {json.dumps({'sources': sources}, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
 
     async def sse_bare():
-        # ── 바이브 모드: 별도 시스템 프롬프트로 모델 자체 지식 사용 ────────
+        # 바이브: 토큰 → [DONE] (sources 없음)
         payload = {
             "model": MODEL,
             "stream": True,
@@ -259,10 +267,9 @@ async def chat(req: ChatRequest):
                         token = data.get("message", {}).get("content", "")
                         if token:
                             yield f"data: {json.dumps({'token': token})}\n\n"
-                        if data.get("done"):
-                            yield "data: [DONE]\n\n"
                     except json.JSONDecodeError:
                         continue
+        yield "data: [DONE]\n\n"
 
     sse_gen = sse_bare() if req.bare else sse_harness()
     return StreamingResponse(
@@ -309,6 +316,7 @@ async def recall_check(req: RecallCheckRequest):
         yield f"data: {json.dumps(meta, ensure_ascii=False)}\n\n"
         async for chunk in stream_recall(context):
             yield chunk
+        yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         stream_with_meta(),
