@@ -117,19 +117,22 @@ async def ensure_doc_embeddings() -> np.ndarray:
     return _doc_embeddings
 
 
-async def retrieve(question: str, top_k: int = TOP_K) -> list[str]:
-    """질문과 코사인 유사도가 높은 상위 top_k 조각을 반환."""
+async def retrieve(question: str, top_k: int = TOP_K) -> tuple[list[str], list[str]]:
+    """질문과 코사인 유사도가 높은 상위 top_k 조각과 각 조각의 첫 줄(제목)을 반환."""
     doc_vecs = await ensure_doc_embeddings()
     q_vec    = await embed(question)
     sims     = [cosine_sim(q_vec, dv) for dv in doc_vecs]
     indices  = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
-    return [DOCS[i] for i in indices]
+    chunks   = [DOCS[i] for i in indices]
+    titles   = [DOCS[i].splitlines()[0] for i in indices]   # 첫 줄 = 항목 제목
+    return chunks, titles
 
 
 # ── Pydantic 모델 ─────────────────────────────────────────────────────
 class ChatRequest(BaseModel):
     question: str
-    context: str   # 프론트에서 넘어오지만 RAG가 대체 — 하위 호환용으로 유지
+    context: str = ""  # 하네스 모드에서는 RAG가 대체; 바이브 모드에서도 무시
+    bare: bool = False  # True = 바이브(모델 직접), False = 하네스(RAG + 출처)
 
 
 class DeviceItem(BaseModel):
@@ -204,19 +207,23 @@ async def stream_recall(context: str):
 # ── 엔드포인트 ────────────────────────────────────────────────────────
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    # RAG: 질문으로 관련 조각 2개 검색 → 해당 조각만 컨텍스트로 사용
-    chunks  = await retrieve(req.question, top_k=TOP_K)
-    context = "\n\n".join(chunks)
-
-    async def sse():
-        # 검색된 조각 정보를 meta 이벤트로 먼저 전송
-        meta = {"type": "meta", "chunks": chunks}
-        yield f"data: {json.dumps(meta, ensure_ascii=False)}\n\n"
+    async def sse_harness():
+        # ── 하네스 모드: RAG 검색 → sources 이벤트 → 모델 스트리밍 ──────
+        chunks, titles = await retrieve(req.question, top_k=TOP_K)
+        context = "\n\n".join(chunks)
+        sources_event = {"type": "sources", "titles": titles}
+        yield f"data: {json.dumps(sources_event, ensure_ascii=False)}\n\n"
         async for chunk in stream_ollama(req.question, context):
             yield chunk
 
+    async def sse_bare():
+        # ── 바이브 모드: 검색 없이 모델만 직접 호출, 출처 없음 ────────────
+        async for chunk in stream_ollama(req.question, ""):
+            yield chunk
+
+    sse_gen = sse_bare() if req.bare else sse_harness()
     return StreamingResponse(
-        sse(),
+        sse_gen,
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

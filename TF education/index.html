@@ -181,6 +181,50 @@
     background: #edf7f1;
   }
 
+  /* 바이브 ↔ 하네스 토글 */
+  .mode-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .mode-label { font-size: .8rem; color: #555; }
+  .toggle-wrap {
+    display: flex;
+    border: 2px solid #0d3b6e;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: .8rem;
+    font-weight: 700;
+  }
+  .toggle-wrap button {
+    padding: 5px 14px;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    width: auto;
+    font-weight: 700;
+    font-size: .8rem;
+    transition: background .15s, color .15s;
+  }
+  .toggle-wrap .t-vibe  { background: #fff; color: #0d3b6e; }
+  .toggle-wrap .t-harn  { background: #fff; color: #0d3b6e; }
+  .toggle-wrap .t-active { background: #0d3b6e; color: #fff; }
+
+  /* 출처 영역 */
+  #sources-box {
+    display: none;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: #eef3fb;
+    border-left: 3px solid #0d3b6e;
+    border-radius: 0 6px 6px 0;
+    font-size: .78rem;
+    color: #1a3a6b;
+    line-height: 1.6;
+  }
+  #sources-box strong { font-weight: 700; }
+
   /* 빠른 질문 칩 */
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .chip {
@@ -226,7 +270,14 @@
 
   <!-- 질문 -->
   <div class="card">
-    <div class="card-label">질문</div>
+    <div class="mode-bar">
+      <span class="mode-label">응답 모드:</span>
+      <div class="toggle-wrap">
+        <button class="t-vibe" id="btn-vibe" onclick="setMode(true)">⚡ 바이브</button>
+        <button class="t-harn t-active" id="btn-harn" onclick="setMode(false)">🔍 하네스</button>
+      </div>
+      <span class="mode-label" id="mode-desc">검색 + 출처 표시</span>
+    </div>
     <textarea id="question" placeholder="예) 폐색 알람이 울리면 어떻게 해야 하나요?"></textarea>
     <!-- 빠른 질문 칩 -->
     <div class="chips">
@@ -268,6 +319,7 @@
       <button id="clear-btn" onclick="clearAnswer()">지우기</button>
     </div>
     <div id="answer-box" class="empty">답변이 여기에 표시됩니다.</div>
+    <div id="sources-box"></div>
     <div id="source-chip" style="display:none;" class="source-chip">근거: /api/recall-check 코드 계산값</div>
   </div>
 
@@ -368,9 +420,12 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
       return;
     }
 
+    const sourcesBox = document.getElementById("sources-box");
     sendBtn.disabled = true;
     answerBox.className = "streaming";
     answerBox.innerHTML = '<span class="cursor"></span>';
+    sourcesBox.style.display = "none";
+    sourcesBox.innerHTML = "";
 
     let accumulated = "";
 
@@ -378,7 +433,7 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
       const res = await fetch(BE + "/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, context }),
+        body: JSON.stringify({ question, context, bare: bareMode }),
       });
 
       if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
@@ -400,11 +455,21 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
           const raw = line.slice(5).trim();
           if (raw === "[DONE]") break;
           try {
-            const { token } = JSON.parse(raw);
-            accumulated += token;
-            answerBox.innerHTML =
-              accumulated.replace(/</g, "&lt;").replace(/>/g, "&gt;")
-              + '<span class="cursor"></span>';
+            const parsed = JSON.parse(raw);
+            if (parsed.type === "sources") {
+              // 하네스 모드 출처 표시
+              const list = parsed.titles.map(t => `• ${t}`).join("<br>");
+              sourcesBox.innerHTML = `<strong>📎 검색 출처</strong><br>${list}`;
+              sourcesBox.style.display = "block";
+            } else if (parsed.type === "meta") {
+              // recall-check meta — 무시(sendQuestion과 공유 안 함)
+            } else {
+              const token = parsed.token ?? "";
+              accumulated += token;
+              answerBox.innerHTML =
+                accumulated.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                + '<span class="cursor"></span>';
+            }
           } catch { /* 파싱 실패 무시 */ }
         }
       }
@@ -425,6 +490,17 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
   document.getElementById("question").addEventListener("keydown", e => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendQuestion();
   });
+
+  // ── 바이브 ↔ 하네스 토글 ──────────────────────────────────────────
+  let bareMode = false;   // false = 하네스(기본), true = 바이브
+
+  function setMode(vibe) {
+    bareMode = vibe;
+    document.getElementById("btn-vibe").classList.toggle("t-active",  vibe);
+    document.getElementById("btn-harn").classList.toggle("t-active", !vibe);
+    document.getElementById("mode-desc").textContent =
+      vibe ? "모델 직접 호출 (출처 없음)" : "검색 + 출처 표시";
+  }
 
   // ── 리콜 대조 ─────────────────────────────────────────────────────
   async function runRecallCheck() {
