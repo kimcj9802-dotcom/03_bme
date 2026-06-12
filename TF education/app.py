@@ -19,7 +19,8 @@ OLLAMA_URL  = "http://121.138.151.6:11434/api/chat"
 EMBED_URL   = "http://121.138.151.6:11434/api/embeddings"
 MODEL       = "qwen3.6:35b-a3b"
 EMBED_MODEL = "bge-m3:latest"
-TOP_K       = 2          # 검색해서 모델에 넘길 조각 수
+TOP_K          = 3     # 검색해서 모델에 넘길 조각 수 (상위 2~3개)
+SIM_THRESHOLD  = 0.3  # 잡음 제거용 낮은 임계값 — 최상위 조각은 미달해도 항상 포함
 
 # ── 매뉴얼 조각 (각 조각 = 독립적으로 임베딩·검색되는 단위) ────────────
 DOCS = [
@@ -100,7 +101,7 @@ RECALL_SYSTEM_PROMPT = (
 
 # ── 임베딩 유틸 ──────────────────────────────────────────────────────
 async def embed(text: str) -> np.ndarray:
-    """단일 텍스트를 bgem3:latest로 임베딩해 1-D numpy 배열로 반환."""
+    """단일 텍스트를 bge-m3:latest로 임베딩해 1-D numpy 배열로 반환."""
     async with httpx.AsyncClient(timeout=60.0) as client:
         res = await client.post(EMBED_URL, json={"model": EMBED_MODEL, "prompt": text})
         res.raise_for_status()
@@ -124,13 +125,28 @@ async def ensure_doc_embeddings() -> np.ndarray:
 
 
 async def retrieve(question: str, top_k: int = TOP_K) -> tuple[list[str], list[str]]:
-    """질문과 코사인 유사도가 높은 상위 top_k 조각과 각 조각의 첫 줄(제목)을 반환."""
+    """코사인 유사도 상위 top_k 조각을 반환.
+    SIM_THRESHOLD 미만 조각은 제외하되, 최상위 1개는 임계값 무관하게 항상 포함.
+    (자료 존재 여부의 최종 판단은 시스템 프롬프트·모델이 담당)
+    """
     doc_vecs = await ensure_doc_embeddings()
     q_vec    = await embed(question)
     sims     = [cosine_sim(q_vec, dv) for dv in doc_vecs]
-    indices  = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
-    chunks   = [DOCS[i] for i in indices]
-    titles   = [DOCS[i].splitlines()[0] for i in indices]   # 첫 줄 = 항목 제목
+
+    # 점수 높은 순 정렬
+    ranked = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)
+
+    selected = []
+    for rank, idx in enumerate(ranked):
+        if rank == 0:
+            selected.append(idx)           # 최상위는 임계값 무관 항상 포함
+        elif sims[idx] >= SIM_THRESHOLD:
+            selected.append(idx)           # 임계값 이상만 추가
+        if len(selected) >= top_k:
+            break
+
+    chunks = [DOCS[i] for i in selected]
+    titles = [DOCS[i].splitlines()[0] for i in selected]
     return chunks, titles
 
 
