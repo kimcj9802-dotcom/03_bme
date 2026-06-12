@@ -9,7 +9,8 @@ test('1) 백엔드 /health 연결 확인', async ({ request }) => {
   const res = await request.get(`${BASE}/health`);
   expect(res.status(), '백엔드가 응답하지 않습니다 — uvicorn이 실행 중인지 확인하세요').toBe(200);
   const body = await res.json();
-  expect(body).toEqual({ status: 'ok' });
+  // docs_cached 필드가 추가될 수 있으므로 부분 일치로 검사
+  expect(body).toMatchObject({ status: 'ok' });
 });
 
 // ── 2-6. 브라우저 E2E — 질문 전송 · 답변 내용 검증 ──────────────────
@@ -26,8 +27,9 @@ test('2~6) 폐색 알람 질문 → 답변 내용 및 안전 고지 검증', asy
   await page.locator('#question').fill('폐색 알람 뜨면 어떻게 해?');
   await page.locator('#send-btn').click();
 
-  // 4) 전송 버튼 재활성화 = 스트리밍 완전 종료 (35b 모델 지연 감안 60 s)
-  await expect(page.locator('#send-btn')).toBeEnabled({ timeout: 60_000 });
+  // 4) 전송 버튼 재활성화 = 스트리밍 완전 종료
+  //    첫 질문은 DOCS 8개 임베딩 캐시 생성 포함 → 넉넉히 120 s
+  await expect(page.locator('#send-btn')).toBeEnabled({ timeout: 120_000 });
 
   const answer = (await page.locator('#answer-box').textContent()) ?? '';
   console.log('\n─── 모델 답변 ───\n' + answer + '\n─────────────────');
