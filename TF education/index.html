@@ -3,129 +3,151 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 질의응답</title>
+<title>의료기기 수리 매뉴얼 챗봇 (DI-2200P)</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f5f6fa; color: #222; min-height: 100vh; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f4f8; color: #222; min-height: 100vh; }
 
   header {
-    background: #1e3a5f;
+    background: #0d3b6e;
     color: #fff;
-    padding: 16px 24px;
+    padding: 14px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
   }
-  header h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: .02em; }
+  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: .01em; }
+  header .subtitle { font-size: .75rem; color: #a8c4e0; margin-top: 2px; }
+
   #status {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: .85rem;
+    font-size: .82rem;
+    white-space: nowrap;
   }
   #dot {
     width: 10px; height: 10px;
     border-radius: 50%;
     background: #aaa;
     transition: background .3s;
+    flex-shrink: 0;
   }
   #dot.ok  { background: #4caf50; }
   #dot.err { background: #f44336; }
 
   main {
-    max-width: 860px;
-    margin: 32px auto;
+    max-width: 900px;
+    margin: 28px auto;
     padding: 0 16px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
   }
 
   .card {
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 1px 4px rgba(0,0,0,.1);
-    padding: 20px;
+    padding: 18px 20px;
   }
-  .card label {
-    display: block;
-    font-size: .8rem;
-    font-weight: 600;
-    color: #555;
-    margin-bottom: 8px;
+  .card-label {
+    font-size: .75rem;
+    font-weight: 700;
+    color: #0d3b6e;
     text-transform: uppercase;
-    letter-spacing: .05em;
+    letter-spacing: .06em;
+    margin-bottom: 8px;
   }
 
   textarea {
     width: 100%;
-    border: 1.5px solid #dde1ea;
+    border: 1.5px solid #d0d8e4;
     border-radius: 8px;
     padding: 10px 12px;
-    font-size: .95rem;
+    font-size: .9rem;
     font-family: inherit;
     resize: vertical;
     transition: border-color .2s;
     background: #fafbfd;
+    line-height: 1.6;
   }
-  textarea:focus { outline: none; border-color: #1e3a5f; background: #fff; }
+  textarea:focus { outline: none; border-color: #0d3b6e; background: #fff; }
 
-  #question { min-height: 72px; }
-  #context  { min-height: 160px; }
+  #question { min-height: 68px; }
+  #context  { min-height: 240px; font-size: .82rem; color: #333; }
+
+  .context-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  #reset-ctx {
+    font-size: .75rem;
+    color: #0d3b6e;
+    background: none;
+    border: 1px solid #0d3b6e;
+    border-radius: 5px;
+    padding: 2px 8px;
+    cursor: pointer;
+    width: auto;
+  }
+  #reset-ctx:hover { background: #e8f0fb; }
 
   button {
     width: 100%;
     padding: 13px;
-    background: #1e3a5f;
+    background: #0d3b6e;
     color: #fff;
     font-size: 1rem;
-    font-weight: 600;
+    font-weight: 700;
     border: none;
     border-radius: 8px;
     cursor: pointer;
     transition: background .2s, opacity .2s;
   }
-  button:hover:not(:disabled) { background: #16304f; }
-  button:disabled { opacity: .5; cursor: not-allowed; }
+  button:hover:not(:disabled) { background: #0a2f58; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
 
   #answer-box {
     min-height: 180px;
-    border: 1.5px solid #dde1ea;
+    border: 1.5px solid #d0d8e4;
     border-radius: 8px;
     padding: 14px;
     background: #fafbfd;
-    font-size: .95rem;
-    line-height: 1.7;
+    font-size: .93rem;
+    line-height: 1.8;
     white-space: pre-wrap;
     word-break: break-word;
     color: #222;
   }
   #answer-box.empty { color: #aaa; font-style: italic; }
-  #answer-box.streaming { border-color: #1e3a5f; }
+  #answer-box.streaming { border-color: #0d3b6e; }
+  #answer-box.err-state { border-color: #f44336; color: #c00; }
 
   .cursor {
     display: inline-block;
     width: 2px; height: 1em;
-    background: #1e3a5f;
+    background: #0d3b6e;
     animation: blink .7s steps(1) infinite;
     vertical-align: text-bottom;
     margin-left: 1px;
   }
   @keyframes blink { 50% { opacity: 0; } }
 
-  .row-label {
+  .answer-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
   }
-  .row-label label { margin-bottom: 0; }
   #clear-btn {
     background: none;
     border: none;
     color: #888;
-    font-size: .8rem;
+    font-size: .78rem;
     cursor: pointer;
     padding: 2px 6px;
     border-radius: 4px;
@@ -133,12 +155,33 @@
     font-weight: 400;
   }
   #clear-btn:hover { background: #f0f0f0; color: #444; }
+
+  /* 빠른 질문 칩 */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip {
+    font-size: .78rem;
+    padding: 4px 12px;
+    border: 1.5px solid #0d3b6e;
+    border-radius: 20px;
+    color: #0d3b6e;
+    background: #f0f5fc;
+    cursor: pointer;
+    transition: background .15s;
+    width: auto;
+    font-weight: 500;
+  }
+  .chip:hover { background: #dce8f8; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>AI 질의응답</h1>
+  <div>
+    <div class="h1-wrap">
+      <h1>의료기기 수리 매뉴얼 챗봇 (DI-2200P)</h1>
+    </div>
+    <div class="subtitle">주입펌프 수리 안내 · 참고 자료 기반 응답</div>
+  </div>
   <div id="status">
     <div id="dot"></div>
     <span id="status-text">연결 확인 중…</span>
@@ -146,24 +189,41 @@
 </header>
 
 <main>
+
+  <!-- 참고 자료 -->
   <div class="card">
-    <label for="context">참고 자료</label>
-    <textarea id="context" placeholder="AI가 참고할 자료(문서, 내용 등)를 여기에 붙여넣으세요."></textarea>
+    <div class="context-header">
+      <div class="card-label">참고 자료 (매뉴얼 발췌)</div>
+      <button id="reset-ctx" onclick="resetContext()">기본값 복원</button>
+    </div>
+    <textarea id="context"></textarea>
   </div>
 
+  <!-- 질문 -->
   <div class="card">
-    <label for="question">질문</label>
-    <textarea id="question" placeholder="질문을 입력하세요." rows="3"></textarea>
+    <div class="card-label">질문</div>
+    <textarea id="question" placeholder="예) 폐색 알람이 울리면 어떻게 해야 하나요?"></textarea>
+    <!-- 빠른 질문 칩 -->
+    <div class="chips">
+      <button class="chip" onclick="setQ('폐색 알람(AL-OCC)이 발생했을 때 조치 방법은?')">폐색 알람 조치</button>
+      <button class="chip" onclick="setQ('공기 알람(AL-AIR) 발생 시 어떻게 처리하나요?')">공기 알람 처리</button>
+      <button class="chip" onclick="setQ('E15 오류 코드의 의미와 대처법을 알려줘.')">E15 오류 대처</button>
+      <button class="chip" onclick="setQ('배터리 교체 기준이 어떻게 되나요?')">배터리 교체 기준</button>
+      <button class="chip" onclick="setQ('소독 및 세척 절차를 알려줘.')">세척·소독 절차</button>
+      <button class="chip" onclick="setQ('정기 점검 항목을 알려줘.')">정기 점검 항목</button>
+    </div>
     <button id="send-btn" style="margin-top:14px;" onclick="sendQuestion()">질문하기</button>
   </div>
 
+  <!-- 답변 -->
   <div class="card">
-    <div class="row-label">
-      <label>답변</label>
+    <div class="answer-header">
+      <div class="card-label">답변</div>
       <button id="clear-btn" onclick="clearAnswer()">지우기</button>
     </div>
     <div id="answer-box" class="empty">답변이 여기에 표시됩니다.</div>
   </div>
+
 </main>
 
 <script>
@@ -171,10 +231,66 @@
   const BE = "http://127.0.0.1:8000";
   // ────────────────────────────────────────────────────────────────────
 
+  const DEFAULT_CONTEXT = `[DI-2200P 주입펌프 수리 매뉴얼 발췌 — 샘플]
+
+1) 폐색 알람(Occlusion / 알람코드 AL-OCC) — p.42
+증상: 주입 중 "폐색" 경고음과 함께 펌프 정지.
+점검: ① 라인 꺾임·눌림 확인 ② 클램프(잠금) 열림 확인 ③ 필터·삼방활전 막힘 확인.
+조치: 막힌 원인 해소 후 [재개] 버튼. 해소 후에도 지속되면 압력센서 점검 대상 → 서비스 요청.
+
+2) 압력 상승 경고(High Pressure / 알람코드 AL-PRS) — p.43
+증상: 주입압이 설정 상한을 넘으면 경고.
+점검: 카테터 위치·환자 자세·라인 길이 확인, 점도 높은 약액 여부 확인.
+조치: 원인 제거 후 압력 상한 재설정. 반복되면 압력센서 캘리브레이션 필요(자격 기술자).
+
+3) 배터리 점검·교체 — p.61
+기준: 완충 후 연속 사용시간 표시 확인.
+만충 대비 80% 미만이면 배터리 교체 대상.
+주의: 정품 배터리만 사용, 임의 분해 금지.
+교체 후 충전 사이클 1회 권장.
+
+4) 센서 오류 코드 모음 — p.78
+E12: 공기방울 감지센서 커넥터 접촉 불량 → 커넥터 재결합 후 전원 재시작.
+E15: 압력센서 신호 불안정 → 캘리브레이션 필요(자격 기술자 전용).
+E21: 도어 닫힘 감지 실패 → 도어 래치·자석 위치 확인.
+E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
+
+5) 공기 알람(Air-in-line / 알람코드 AL-AIR) — p.45
+증상: 라인 내 기포 감지 시 정지.
+점검: 챔버 액위, 라인 프라이밍 상태, 센서 창 오염 확인.
+조치: 라인 재프라이밍·기포 제거 후 재개. 센서 창 이물은 마른 천으로 닦기.
+
+6) 세척·소독 절차 — p.90
+외장: 전원 차단 후 중성세제 적신 천으로 닦고 건조. 분무·침수 금지.
+소독: 70% 알코올 천 사용 가능, 화면·센서 창은 강한 용제 금지.
+주기: 환자 교체 시마다 외장 소독 권장.
+
+7) 정기 점검 항목 — p.102
+일일: 알람음·화면 표시·배터리 잔량 확인.
+월간: 압력센서 동작, 도어 래치, 충전 상태 점검.
+연간: 압력센서 캘리브레이션, 누설전류 측정(자격 기술자·점검 기록보관).
+
+8) 작업 안전 원칙 — p.7
+본 매뉴얼의 점검·조치는 자격 갖춘 기술자 전용. 임의 분해·내부 회로 수리·부품 개조 금지. 의심 시 제조사 서비스 요청.
+환자 연결 상태에서의 점검은 금지(반드시 라인 분리 후).`;
+
   const dot        = document.getElementById("dot");
   const statusText = document.getElementById("status-text");
   const sendBtn    = document.getElementById("send-btn");
   const answerBox  = document.getElementById("answer-box");
+  const ctxArea    = document.getElementById("context");
+
+  // 참고 자료 기본값 채우기
+  ctxArea.value = DEFAULT_CONTEXT;
+
+  function resetContext() {
+    ctxArea.value = DEFAULT_CONTEXT;
+  }
+
+  function setQ(text) {
+    document.getElementById("question").value = text;
+    document.getElementById("question").focus();
+  }
 
   // 시작 시 헬스 체크
   async function checkHealth() {
@@ -183,9 +299,7 @@
       if (res.ok) {
         dot.className = "ok";
         statusText.textContent = "백엔드 연결됨";
-      } else {
-        throw new Error();
-      }
+      } else throw new Error();
     } catch {
       dot.className = "err";
       statusText.textContent = "백엔드 연결 실패";
@@ -200,7 +314,7 @@
 
   async function sendQuestion() {
     const question = document.getElementById("question").value.trim();
-    const context  = document.getElementById("context").value.trim();
+    const context  = ctxArea.value.trim();
 
     if (!question) {
       alert("질문을 입력해 주세요.");
@@ -232,7 +346,7 @@
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop(); // 마지막 미완성 줄 보류
+        buffer = lines.pop();
 
         for (const line of lines) {
           if (!line.startsWith("data:")) continue;
@@ -248,13 +362,12 @@
         }
       }
 
-      // 커서 제거, 최종 텍스트
       answerBox.textContent = accumulated || "응답 없음";
       answerBox.className = "";
 
     } catch (err) {
       answerBox.textContent = "오류: " + err.message;
-      answerBox.className = "err";
+      answerBox.className = "err-state";
       dot.className = "err";
       statusText.textContent = "요청 실패";
     } finally {
@@ -262,7 +375,6 @@
     }
   }
 
-  // Enter(Ctrl+Enter)로 질문 전송
   document.getElementById("question").addEventListener("keydown", e => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendQuestion();
   });

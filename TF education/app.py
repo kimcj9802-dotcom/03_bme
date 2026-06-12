@@ -16,7 +16,12 @@ app.add_middleware(
 
 OLLAMA_URL = "http://121.138.151.6:11434/api/chat"
 MODEL = "qwen3.6:35b-a3b"
-SYSTEM_PROMPT = "참고 자료에만 근거해 한국어로 간결히 답한다. 자료에 없으면 '확인되지 않습니다'라고 한다."
+SYSTEM_PROMPT = (
+    "너는 의료기기 수리 매뉴얼 안내 도우미다. "
+    "참고 자료(매뉴얼 발췌)에만 근거해 한국어로 답한다. "
+    "증상을 물으면 '증상 → 점검 → 조치' 순서로 정리해 답한다. "
+    "자료에 없는 내용은 추측하지 말고 '매뉴얼에서 확인 불가'라고 답한다."
+)
 
 
 class ChatRequest(BaseModel):
