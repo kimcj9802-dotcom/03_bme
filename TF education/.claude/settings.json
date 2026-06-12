@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -Command \"$input = $null; $raw = ''; try { $raw = [Console]::In.ReadToEnd() } catch {}; $data = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue; $path = if ($data.tool_input.file_path) { $data.tool_input.file_path } elseif ($data.tool_input.path) { $data.tool_input.path } else { '' }; if ($path -match '\\.html$') { $content = if ($data.tool_input.new_string) { $data.tool_input.new_string } elseif ($data.tool_input.content) { $data.tool_input.content } else { '' }; if ($content -match '11434|ollama') { Write-Host '[BLOCKED] HTML 파일에 ollama(:11434) 직접 호출이 감지되었습니다.'; Write-Host '이유: 프론트(HTML)는 반드시 백엔드(BE = http://127.0.0.1:8000)를 통해야 합니다.'; Write-Host '수정 방법: fetch(BE + \"/api/chat\", ...) 형태로 사용하세요.'; exit 2 } }\""
+            "command": "powershell -NoProfile -Command \"$raw = ''; try { $raw = [Console]::In.ReadToEnd() } catch {}; $data = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue; $path = if ($data.tool_input.file_path) { $data.tool_input.file_path } elseif ($data.tool_input.path) { $data.tool_input.path } else { '' }; if ($path -match '\\\\.html$') { $content = if ($data.tool_input.new_string) { $data.tool_input.new_string } elseif ($data.tool_input.content) { $data.tool_input.content } else { '' }; if ($content -match '11434|ollama') { Write-Host ''; Write-Host '[BLOCKED] 분리 위반 감지 — HTML에 ollama / 11434 직접 호출이 포함되어 있습니다.'; Write-Host '  규칙: 프론트(HTML)는 반드시 내 백엔드(BE = http://127.0.0.1:8000)만 호출해야 합니다.'; Write-Host '  수정: fetch(BE + \"/api/chat\", ...) 형태로 변경하세요.'; Write-Host '  ollama / 11434 직접 호출은 CORS 오류 및 보안 위반을 유발합니다.'; Write-Host ''; exit 2 } }\""
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -Command \"$raw = ''; try { $raw = [Console]::In.ReadToEnd() } catch {}; $data = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue; $path = if ($data.tool_input.file_path) { $data.tool_input.file_path } elseif ($data.tool_input.path) { $data.tool_input.path } else { '' }; if ($path -match 'app\\.py$') { Write-Host ''; Write-Host '[백엔드 변경 감지] app.py 가 수정되었습니다. 아래 항목을 점검하세요:'; Write-Host '  1) OLLAMA_URL / MODEL 상수가 올바른가?'; Write-Host '  2) /api/chat 엔드포인트가 SSE(StreamingResponse)를 반환하는가?'; Write-Host '  3) CORS 설정이 유지되는가?'; Write-Host '  4) 서버를 재시작해야 변경이 반영됩니다: python -m uvicorn app:app --port 8000'; Write-Host '' }\""
+            "command": "powershell -NoProfile -Command \"$raw = ''; try { $raw = [Console]::In.ReadToEnd() } catch {}; $data = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue; $path = if ($data.tool_input.file_path) { $data.tool_input.file_path } elseif ($data.tool_input.path) { $data.tool_input.path } else { '' }; if ($path -match 'app\\\\.py$') { Write-Host ''; Write-Host '[app.py 변경 감지] 아래 항목을 점검하세요:'; Write-Host '  1) OLLAMA_URL / EMBED_URL 상수가 올바른가? (http://121.138.151.6:11434/...)'; Write-Host '  2) MODEL(qwen3.6:35b-a3b) / EMBED_MODEL(bge-m3:latest) 이름이 정확한가?'; Write-Host '  3) /api/chat 이 SSE(StreamingResponse)를 반환하는가?'; Write-Host '  4) bare=True(바이브) / False(하네스) 분기가 유지되는가?'; Write-Host '  5) CORS allow_origins=[\"*\"] 설정이 유지되는가?'; Write-Host '  ★ 서버 재시작 필요: python -m uvicorn app:app --port 8000'; Write-Host ''\""
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -Command \"Write-Host ''; Write-Host '========== git status =========='; git -C $PWD status; Write-Host '================================'; Write-Host ''\""
+            "command": "powershell -NoProfile -Command \"Write-Host ''; Write-Host '========== git status =========='; git status; Write-Host '================================'; Write-Host ''\""
           }
         ]
       }
