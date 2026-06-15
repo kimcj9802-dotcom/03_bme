@@ -252,6 +252,54 @@
     font-weight: 500;
   }
   .chip:hover { background: #dce8f8; }
+
+  /* 오류 코드 빠른 검색 패널 */
+  .err-search-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  #err-code-input {
+    flex: 1;
+    min-width: 120px;
+    max-width: 200px;
+    border: 1.5px solid #d0d8e4;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: .92rem;
+    font-family: inherit;
+    background: #fafbfd;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    transition: border-color .2s;
+  }
+  #err-code-input:focus { outline: none; border-color: #b03a2e; background: #fff; }
+  #err-search-btn {
+    width: auto;
+    padding: 8px 18px;
+    font-size: .88rem;
+    font-weight: 700;
+    background: #b03a2e;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  #err-search-btn:hover:not(:disabled) { background: #922e24; }
+  .err-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .err-chip {
+    font-size: .82rem;
+    padding: 5px 16px;
+    border: 2px solid #b03a2e;
+    border-radius: 20px;
+    color: #b03a2e;
+    background: #fdf2f1;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    width: auto;
+    font-weight: 700;
+    letter-spacing: .04em;
+  }
+  .err-chip:hover { background: #b03a2e; color: #fff; }
 </style>
 </head>
 <body>
@@ -270,6 +318,22 @@
 </header>
 
 <main>
+
+  <!-- 오류 코드 빠른 검색 -->
+  <div class="card">
+    <div class="card-label">⚠ 오류 코드 빠른 검색</div>
+    <div class="err-search-row">
+      <input id="err-code-input" type="text" placeholder="예) E12" maxlength="6"
+             onkeydown="if(event.key==='Enter') searchErrCode()" />
+      <button id="err-search-btn" onclick="searchErrCode()">코드 검색</button>
+    </div>
+    <div class="err-chips">
+      <button class="err-chip" onclick="searchErrCode('E12')">E12</button>
+      <button class="err-chip" onclick="searchErrCode('E15')">E15</button>
+      <button class="err-chip" onclick="searchErrCode('E21')">E21</button>
+      <button class="err-chip" onclick="searchErrCode('E33')">E33</button>
+    </div>
+  </div>
 
   <!-- 참고 자료 -->
   <div class="card">
@@ -513,6 +577,18 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
     document.getElementById("btn-harn").classList.toggle("t-active", !vibe);
     document.getElementById("mode-desc").textContent =
       vibe ? "모델 직접 호출 (출처 없음)" : "검색 + 출처 표시";
+  }
+
+  // ── 오류 코드 빠른 검색 ───────────────────────────────────────────
+  function searchErrCode(code) {
+    const raw = (code ?? document.getElementById("err-code-input").value).trim().toUpperCase();
+    if (!raw) { alert("오류 코드를 입력하거나 칩을 선택하세요."); return; }
+    // 하네스 모드 강제
+    if (bareMode) setMode(false);
+    document.getElementById("question").value =
+      `오류 코드 ${raw}의 의미와 조치를 매뉴얼 근거로 알려줘.`;
+    document.getElementById("err-code-input").value = raw;
+    sendQuestion();
   }
 
   // ── 리콜 대조 ─────────────────────────────────────────────────────
