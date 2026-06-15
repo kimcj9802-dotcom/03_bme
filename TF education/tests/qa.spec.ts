@@ -170,3 +170,115 @@ test('바이브 모드 — 출처 없이 답변 확인', async ({ page }) => {
   expect(answer.trim().length, '바이브 답변이 비어 있습니다').toBeGreaterThan(0);
   expect(sourcesVisible, '바이브 모드에서 출처 박스가 보이면 안 됩니다').toBe(false);
 });
+
+// ── 바이브↔하네스 SSE 직접 비교 ─────────────────────────────────────
+// 브라우저 컨텍스트에서 fetch + ReadableStream으로 SSE를 직접 파싱해
+// 두 모드의 응답 차이를 검증한다 (HTML→백엔드:8000 경유, 11434 직접 호출 없음).
+async function callChat(
+  page: import('@playwright/test').Page,
+  question: string,
+  bare: boolean
+): Promise<{ tokens: string; sources: { title: string; page: string }[] | null }> {
+  return page.evaluate(
+    async ({ question, bare, backendUrl }) => {
+      const res = await fetch(`${backendUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, context: '', bare }),
+      });
+      const reader  = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let tokens = '';
+      let sources: { title: string; page: string }[] | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const raw = line.slice(5).trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed.sources) sources = parsed.sources;
+            else if (parsed.token) tokens += parsed.token;
+          } catch { /* 무시 */ }
+        }
+      }
+      return { tokens, sources };
+    },
+    { question, bare, backendUrl: BACKEND }
+  );
+}
+
+test('바이브↔하네스 비교 — 하네스=근거+출처 / 바이브=출처 없음', async ({ page }) => {
+  // 빈 페이지를 열어 CORS same-origin 없이 백엔드 직접 fetch 가능하게 함
+  await page.goto(FRONTEND);
+  await expect(page.locator('#dot')).toHaveClass(/\bok\b/, { timeout: 8_000 });
+
+  const Q = 'E21 무슨 뜻이야?';
+
+  // ── 1) 바이브 모드 (bare: true) ────────────────────────────────────
+  console.log(`\n  📨 바이브 모드로 "${Q}" 전송 중…`);
+  const vibeRes = await callChat(page, Q, true);
+  console.log('  바이브 답변(앞 150자):', vibeRes.tokens.slice(0, 150));
+  console.log('  바이브 sources:', JSON.stringify(vibeRes.sources));
+
+  // ── 2) 하네스 모드 (bare: false) ───────────────────────────────────
+  console.log(`\n  📨 하네스 모드로 "${Q}" 전송 중…`);
+  const harnRes = await callChat(page, Q, false);
+  console.log('  하네스 답변(앞 150자):', harnRes.tokens.slice(0, 150));
+  console.log('  하네스 sources:', JSON.stringify(harnRes.sources));
+
+  // ── 3) 검증 ────────────────────────────────────────────────────────
+  const harnSourcesText = harnRes.sources
+    ? harnRes.sources.map(s => `${s.title} ${s.page}`).join(' ')
+    : '';
+
+  const results = [
+    {
+      label: '하네스 답변에 "도어" 포함',
+      pass: /도어/.test(harnRes.tokens),
+    },
+    {
+      label: '하네스 출처에 "센서 오류 코드" 포함',
+      pass: /센서 오류 코드/.test(harnSourcesText),
+    },
+    {
+      label: '하네스 출처에 "p.78" 포함',
+      pass: /p\.78/.test(harnSourcesText),
+    },
+    {
+      label: '하네스 답변에 안전 고지("자격 기술자") 포함',
+      pass: /자격 기술자/.test(harnRes.tokens),
+    },
+    {
+      label: '바이브 답변이 비어있지 않음',
+      pass: vibeRes.tokens.trim().length > 0,
+    },
+    {
+      label: '바이브에는 sources 이벤트 없음',
+      pass: vibeRes.sources === null,
+    },
+  ];
+
+  // ── 4) 한 줄 리포트 ────────────────────────────────────────────────
+  const harnPass = results.slice(0, 4).every(r => r.pass);
+  const vibePass = results.slice(4).every(r => r.pass);
+  console.log('\n═══ 바이브↔하네스 비교 결과 ═══');
+  for (const r of results) {
+    console.log(`  ${r.pass ? '✅' : '❌'} ${r.label}`);
+  }
+  console.log(
+    `\n  → 하네스=근거+출처 ${harnPass ? '✅' : '❌'} / 바이브=출처 없음 ${vibePass ? '✅' : '❌'}`
+  );
+  console.log('═══════════════════════════════\n');
+
+  for (const r of results) {
+    expect(r.pass, r.label).toBe(true);
+  }
+});
