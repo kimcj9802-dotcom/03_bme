@@ -75,6 +75,63 @@ test('2~5) 하네스 모드 — 질문 전송·답변·출처 검증', async ({ 
   expect(hasSources, '출처(sources-box)가 표시되지 않았습니다').toBe(true);
 });
 
+// ── E21 오류 코드 빠른 검색 QA ──────────────────────────────────────
+test('E21 오류 코드 빠른 검색 — 도어·출처·안전 고지 검증', async ({ page }) => {
+
+  // index.html 열기
+  await page.goto(FRONTEND);
+  await expect(page.locator('header h1')).toBeVisible();
+  await expect(page.locator('#dot')).toHaveClass(/\bok\b/, { timeout: 8_000 });
+  console.log('\n  ✅ index.html 로드 + 백엔드 연결 확인');
+
+  // 하네스 모드 확인 (아니면 켜기)
+  const harnBtn = page.locator('#btn-harn');
+  if (!(await harnBtn.evaluate(el => el.classList.contains('t-active')))) {
+    await harnBtn.click();
+    console.log('  ℹ️  하네스 모드로 전환');
+  }
+  await expect(harnBtn).toHaveClass(/t-active/);
+  console.log('  ✅ 하네스 모드 활성 확인');
+
+  // 질문칸에 직접 입력 후 전송 (오류 코드 패널 질문 형식과 동일)
+  const Q = 'E21 무슨 뜻이야?';
+  await page.locator('#question').fill(Q);
+  await page.locator('#send-btn').click();
+  console.log(`\n  📨 질문 전송: "${Q}"`);
+
+  // 스트리밍 완료 대기 (35b 모델 지연 감안 — 최대 120 s)
+  await expect(page.locator('#send-btn')).toBeEnabled({ timeout: 120_000 });
+
+  const answer = (await page.locator('#answer-box').textContent()) ?? '';
+  console.log('\n─── E21 답변 ───\n' + answer + '\n────────────────');
+
+  // 출처 박스 내용
+  const sourcesBox  = page.locator('#sources-box');
+  await expect(sourcesBox).toBeVisible({ timeout: 5_000 });
+  const sourcesText = (await sourcesBox.textContent()) ?? '';
+  console.log('  출처:', sourcesText.trim().replace(/\n/g, ' | '));
+
+  // ── 검증 항목 ────────────────────────────────────────────────────
+  const results = [
+    { label: '답변에 "도어" 포함',              pass: /도어/.test(answer) },
+    { label: '출처에 "센서 오류 코드" 포함',     pass: /센서 오류 코드/.test(sourcesText) },
+    { label: '출처에 "p.78" 포함',              pass: /p\.78/.test(sourcesText) },
+    { label: '답변에 안전 고지("자격 기술자") 포함', pass: /자격 기술자/.test(answer) },
+  ];
+
+  console.log('\n═══ E21 검증 결과 ═══');
+  for (const r of results) {
+    console.log(`  ${r.pass ? '✅ 통과' : '❌ 실패'} — ${r.label}`);
+  }
+  const allPass = results.every(r => r.pass);
+  console.log(`\n  → 최종: ${allPass ? '✅ 통과' : '❌ 실패'}`);
+  console.log('══════════════════════\n');
+
+  for (const r of results) {
+    expect(r.pass, r.label).toBe(true);
+  }
+});
+
 // ── 바이브 모드 전환 확인 ───────────────────────────────────────────
 test('바이브 모드 — 출처 없이 답변 확인', async ({ page }) => {
   await page.goto(FRONTEND);
