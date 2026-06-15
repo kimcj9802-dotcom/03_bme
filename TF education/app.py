@@ -1,11 +1,25 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import re
+import io
 import httpx
 import json
 import numpy as np
+
+try:
+    import fitz          # pymupdf — PDF 텍스트 추출
+    _FITZ_OK = True
+except ImportError:
+    _FITZ_OK = False
+
+try:
+    import pytesseract   # OCR (선택 — 없어도 동작)
+    from PIL import Image
+    _OCR_OK = True
+except ImportError:
+    _OCR_OK = False
 
 app = FastAPI()
 
@@ -68,6 +82,24 @@ DOCS = [
 # ── 임베딩 캐시 (앱 수명 동안 유지) ──────────────────────────────────
 _doc_embeddings: np.ndarray | None = None   # shape (N, D)
 
+# ── 업로드로 추가된 동적 조각 ─────────────────────────────────────────
+_user_docs: list[str] = []   # POST /api/upload-pdf 로 채워짐
+
+def _get_all_docs() -> list[str]:
+    return DOCS + _user_docs
+
+# ── PDF 문제 해결 섹션 키워드 패턴 ────────────────────────────────────
+TROUBLESHOOT_RE = re.compile(
+    r"troubleshoot|trouble[\s\-]?shoot|"
+    r"문제[\s·]?해결|오류|에러|고장|장애|이상|"
+    r"error[\s_]?code|error[\s_]?list|error[\s_]?message|"
+    r"alarm|알람|경보|경고|warning|"
+    r"E\d{1,3}\b|AL-[A-Z]+|Err[\s]?\d|"
+    r"수리|수선|repair|조치|대처|해결|점검|"
+    r"fault|failure|malfunction",
+    re.IGNORECASE,
+)
+
 
 SYSTEM_PROMPT = (
     "아래 근거 자료에 질문의 답이 실제로 있으면 출처와 함께 답하고, "
@@ -111,22 +143,27 @@ def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
 
 
 async def ensure_doc_embeddings() -> np.ndarray:
-    """DOCS 임베딩을 최초 1회만 계산해 메모리에 캐시."""
+    """DOCS + _user_docs 임베딩을 캐시. 문서 수가 달라지면 재계산."""
     global _doc_embeddings
-    if _doc_embeddings is None:
-        vecs = []
-        for doc in DOCS:
-            vecs.append(await embed(doc))
+    all_docs = _get_all_docs()
+    if _doc_embeddings is None or _doc_embeddings.shape[0] != len(all_docs):
+        vecs = [await embed(doc) for doc in all_docs]
         _doc_embeddings = np.stack(vecs)   # (N, D)
     return _doc_embeddings
 
 
 def _parse_source(first_line: str) -> dict:
-    """'N) 조각명 — p.OO' 형태의 첫 줄에서 title과 page를 분리."""
-    m = re.match(r'^\d+\)\s*(.+?)\s*[—-]+\s*(p\.\d+)', first_line)
+    """조각 첫 줄에서 title·page 분리. 기본 형식 + 업로드 형식 모두 지원."""
+    # 기본 형식: "N) 조각명 — p.OO"
+    m = re.match(r'^\d+\)\s*(.+?)\s*[—\-]+\s*(p\.\d+)', first_line)
     if m:
         return {"title": m.group(1).strip(), "page": m.group(2).strip()}
-    # 패턴 불일치 시 원본 전체를 title로
+    # 업로드 형식: "[업로드 자료 p.OO]"
+    m2 = re.match(r'^\[(.+?)\]', first_line)
+    if m2:
+        inner = m2.group(1).strip()
+        pg = re.search(r'p\.(\d+)', inner)
+        return {"title": inner, "page": f"p.{pg.group(1)}" if pg else ""}
     return {"title": first_line.strip(), "page": ""}
 
 
@@ -135,6 +172,7 @@ async def retrieve(question: str, top_k: int = TOP_K) -> tuple[list[str], list[d
     SIM_THRESHOLD 미만 조각은 제외하되, 최상위 1개는 임계값 무관하게 항상 포함.
     반환: (chunks, sources) — sources = [{"title": ..., "page": ...}, ...]
     """
+    all_docs = _get_all_docs()
     doc_vecs = await ensure_doc_embeddings()
     q_vec    = await embed(question)
     sims     = [cosine_sim(q_vec, dv) for dv in doc_vecs]
@@ -150,8 +188,8 @@ async def retrieve(question: str, top_k: int = TOP_K) -> tuple[list[str], list[d
         if len(selected) >= top_k:
             break
 
-    chunks  = [DOCS[i] for i in selected]
-    sources = [_parse_source(DOCS[i].splitlines()[0]) for i in selected]
+    chunks  = [all_docs[i] for i in selected]
+    sources = [_parse_source(all_docs[i].splitlines()[0]) for i in selected]
     return chunks, sources
 
 
@@ -319,6 +357,114 @@ async def recall_check(req: RecallCheckRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── PDF 파싱 헬퍼 ─────────────────────────────────────────────────────
+def _page_to_text_ocr(page) -> str:
+    """pymupdf 페이지 → 텍스트. 스캔본이면 OCR 시도."""
+    text = page.get_text().strip()
+    if len(text) >= 100:
+        return text
+    # 텍스트가 희박 → 스캔 이미지로 판단, OCR 시도
+    if _OCR_OK:
+        try:
+            mat = fitz.Matrix(2.0, 2.0)   # 2× 확대로 OCR 정확도 향상
+            pix = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY)
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            text = pytesseract.image_to_string(img, lang="kor+eng").strip()
+        except Exception:
+            pass
+    return text
+
+
+def _extract_pdf_pages(pdf_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
+    """PDF 전 페이지에서 (page_num, text) 목록 반환. OCR 사용 여부도 반환."""
+    if not _FITZ_OK:
+        raise RuntimeError("pymupdf(fitz) 패키지가 설치되지 않았습니다: pip install pymupdf")
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    pages, ocr_used = [], False
+    for i, page in enumerate(doc, 1):
+        raw = page.get_text().strip()
+        if len(raw) < 100 and _OCR_OK:
+            ocr_used = True
+        text = _page_to_text_ocr(page)
+        if text:
+            pages.append((i, text))
+    doc.close()
+    return pages, ocr_used
+
+
+def _filter_troubleshoot_chunks(pages: list[tuple[int, str]]) -> list[str]:
+    """문제 해결·오류 코드 관련 페이지만 조각으로 추출."""
+    chunks = []
+    for page_num, text in pages:
+        if not TROUBLESHOOT_RE.search(text):
+            continue
+        # 페이지가 길면 단락 기준으로 분할 (600자 이내)
+        if len(text) <= 800:
+            chunks.append(f"[업로드 자료 p.{page_num}]\n{text}")
+            continue
+        paragraphs = re.split(r"\n{2,}", text)
+        bucket: list[str] = []
+        for para in paragraphs:
+            bucket.append(para)
+            if len("\n\n".join(bucket)) > 600:
+                chunk_text = "\n\n".join(bucket).strip()
+                if chunk_text:
+                    chunks.append(f"[업로드 자료 p.{page_num}]\n{chunk_text}")
+                bucket = []
+        if bucket:
+            chunk_text = "\n\n".join(bucket).strip()
+            if chunk_text:
+                chunks.append(f"[업로드 자료 p.{page_num}]\n{chunk_text}")
+    return chunks
+
+
+@app.post("/api/upload-pdf")
+async def upload_pdf(file: UploadFile = File(...)):
+    global _user_docs, _doc_embeddings
+    if not file.filename.lower().endswith(".pdf"):
+        return {"ok": False, "error": "PDF 파일(.pdf)만 업로드 가능합니다."}
+    pdf_bytes = await file.read()
+    try:
+        pages, ocr_used = _extract_pdf_pages(pdf_bytes)
+    except RuntimeError as e:
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        return {"ok": False, "error": f"PDF 파싱 오류: {e}"}
+
+    chunks = _filter_troubleshoot_chunks(pages)
+    if not chunks:
+        return {
+            "ok": False,
+            "error": (
+                "문제 해결·오류 코드 관련 내용을 찾을 수 없습니다. "
+                "파일에 Troubleshooting / Error Code / 문제 해결 섹션이 포함되어 있는지 확인하세요."
+            ),
+            "pages_processed": len(pages),
+            "ocr_used": ocr_used,
+        }
+
+    _user_docs = chunks          # 기존 업로드 대체 (내장 DOCS 는 보존)
+    _doc_embeddings = None       # 캐시 무효화 → 다음 질문 시 재임베딩
+
+    return {
+        "ok": True,
+        "filename": file.filename,
+        "pages_processed": len(pages),
+        "chunks_extracted": len(chunks),
+        "ocr_used": ocr_used,
+        "preview": chunks[:3],   # 미리보기 앞 3개
+    }
+
+
+@app.post("/api/reset-docs")
+async def reset_docs():
+    """업로드 자료를 초기화하고 내장 DOCS만 사용."""
+    global _user_docs, _doc_embeddings
+    _user_docs = []
+    _doc_embeddings = None
+    return {"ok": True, "message": "업로드 자료가 초기화되었습니다. 내장 매뉴얼만 사용합니다."}
 
 
 @app.get("/health")

@@ -10,114 +10,67 @@
 
   /* ── 헤더 ── */
   header {
-    background: #0d3b6e;
-    color: #fff;
+    background: #0d3b6e; color: #fff;
     padding: 12px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
     box-shadow: 0 2px 8px rgba(0,0,0,.25);
-    gap: 16px;
   }
   header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: .01em; }
   .subtitle  { font-size: .72rem; color: #a8c4e0; margin-top: 2px; }
 
   #status { display: flex; align-items: center; gap: 8px; font-size: .82rem; white-space: nowrap; }
-  #dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background: #aaa; transition: background .3s; flex-shrink: 0;
-  }
+  #dot { width: 10px; height: 10px; border-radius: 50%; background: #aaa; transition: background .3s; flex-shrink: 0; }
   #dot.ok  { background: #4caf50; }
   #dot.err { background: #f44336; }
 
-  /* 관리자 영역 (헤더 우측) */
   .header-right { display: flex; align-items: center; gap: 14px; }
   #admin-badge {
-    display: none;
-    font-size: .75rem;
-    background: #e8a020;
-    color: #fff;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-weight: 700;
-    white-space: nowrap;
+    display: none; font-size: .75rem;
+    background: #e8a020; color: #fff;
+    padding: 3px 10px; border-radius: 12px; font-weight: 700; white-space: nowrap;
   }
   #admin-badge.visible { display: inline-block; }
   #btn-admin-login {
-    font-size: .78rem;
-    padding: 5px 14px;
-    background: rgba(255,255,255,.15);
-    color: #fff;
+    font-size: .78rem; padding: 5px 14px;
+    background: rgba(255,255,255,.15); color: #fff;
     border: 1.5px solid rgba(255,255,255,.4);
-    border-radius: 7px;
-    cursor: pointer;
-    width: auto;
-    font-weight: 600;
-    transition: background .15s;
-    white-space: nowrap;
+    border-radius: 7px; cursor: pointer; width: auto; font-weight: 600;
+    transition: background .15s; white-space: nowrap;
   }
   #btn-admin-login:hover { background: rgba(255,255,255,.28); }
 
   /* ── 탭 네비게이션 ── */
   .tab-nav {
     background: #0a2f58;
-    display: flex;
-    padding: 0 24px;
-    gap: 4px;
+    display: flex; padding: 0 24px; gap: 4px;
     border-bottom: 3px solid #093050;
   }
   .tab-btn {
-    padding: 10px 22px;
-    font-size: .9rem;
-    font-weight: 700;
-    color: #a8c4e0;
-    background: transparent;
-    border: none;
-    border-bottom: 3px solid transparent;
-    margin-bottom: -3px;
-    cursor: pointer;
-    width: auto;
-    transition: color .15s, border-color .15s;
-    letter-spacing: .01em;
+    padding: 10px 22px; font-size: .9rem; font-weight: 700;
+    color: #a8c4e0; background: transparent; border: none;
+    border-bottom: 3px solid transparent; margin-bottom: -3px;
+    cursor: pointer; width: auto; transition: color .15s, border-color .15s;
   }
   .tab-btn:hover { color: #fff; }
   .tab-btn.tab-active { color: #fff; border-bottom-color: #4db6ff; }
-  .tab-btn.tab-locked { color: #5577aa; cursor: default; }
-  .tab-btn.tab-locked:hover { color: #7799bb; }
+  /* 관리자 전용 탭 — 기본 숨김 */
+  .tab-admin { display: none; }
+  body.admin-mode .tab-admin { display: block; }
 
-  /* ── 메인 레이아웃 ── */
+  /* ── 메인 ── */
   main { max-width: 900px; margin: 24px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 16px; }
-
   .tab-panel { display: none; flex-direction: column; gap: 16px; }
   .tab-panel.panel-active { display: flex; }
 
   /* ── 카드 ── */
-  .card {
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.1);
-    padding: 18px 20px;
-  }
-  .card-label {
-    font-size: .74rem;
-    font-weight: 700;
-    color: #0d3b6e;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    margin-bottom: 8px;
-  }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.1); padding: 18px 20px; }
+  .card-label { font-size: .74rem; font-weight: 700; color: #0d3b6e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
 
   /* ── 입력 ── */
   textarea, input[type="text"], input[type="password"] {
-    width: 100%;
-    border: 1.5px solid #d0d8e4;
-    border-radius: 8px;
-    padding: 10px 12px;
-    font-size: .9rem;
-    font-family: inherit;
-    transition: border-color .2s;
-    background: #fafbfd;
-    line-height: 1.6;
+    width: 100%; border: 1.5px solid #d0d8e4; border-radius: 8px;
+    padding: 10px 12px; font-size: .9rem; font-family: inherit;
+    transition: border-color .2s; background: #fafbfd; line-height: 1.6;
   }
   textarea { resize: vertical; }
   textarea:focus, input:focus { outline: none; border-color: #0d3b6e; background: #fff; }
@@ -125,66 +78,37 @@
 
   /* ── 버튼 기본 ── */
   button {
-    width: 100%;
-    padding: 13px;
-    background: #0d3b6e;
-    color: #fff;
-    font-size: 1rem;
-    font-weight: 700;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background .2s, opacity .2s;
+    width: 100%; padding: 13px; background: #0d3b6e; color: #fff;
+    font-size: 1rem; font-weight: 700; border: none; border-radius: 8px;
+    cursor: pointer; transition: background .2s, opacity .2s;
   }
   button:hover:not(:disabled) { background: #0a2f58; }
   button:disabled { opacity: .45; cursor: not-allowed; }
 
-  /* ── 답변 박스 ── */
+  /* ── 답변 ── */
   #answer-box {
-    min-height: 180px;
-    border: 1.5px solid #d0d8e4;
-    border-radius: 8px;
-    padding: 14px;
-    background: #fafbfd;
-    font-size: .93rem;
-    line-height: 1.8;
-    white-space: pre-wrap;
-    word-break: break-word;
-    color: #222;
+    min-height: 180px; border: 1.5px solid #d0d8e4; border-radius: 8px;
+    padding: 14px; background: #fafbfd; font-size: .93rem;
+    line-height: 1.8; white-space: pre-wrap; word-break: break-word; color: #222;
   }
   #answer-box.empty    { color: #aaa; font-style: italic; }
   #answer-box.streaming { border-color: #0d3b6e; }
   #answer-box.err-state { border-color: #f44336; color: #c00; }
-
-  .cursor {
-    display: inline-block; width: 2px; height: 1em;
-    background: #0d3b6e; animation: blink .7s steps(1) infinite;
-    vertical-align: text-bottom; margin-left: 1px;
-  }
+  .cursor { display: inline-block; width: 2px; height: 1em; background: #0d3b6e; animation: blink .7s steps(1) infinite; vertical-align: text-bottom; margin-left: 1px; }
   @keyframes blink { 50% { opacity: 0; } }
-
   .answer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  #clear-btn {
-    background: none; border: none; color: #888;
-    font-size: .78rem; cursor: pointer; padding: 2px 6px;
-    border-radius: 4px; width: auto; font-weight: 400;
-  }
+  #clear-btn { background: none; border: none; color: #888; font-size: .78rem; cursor: pointer; padding: 2px 6px; border-radius: 4px; width: auto; font-weight: 400; }
   #clear-btn:hover { background: #f0f0f0; color: #444; }
 
-  /* ── 출처 박스 ── */
+  /* ── 출처 ── */
   #sources-box {
-    display: none;
-    margin-top: 10px; padding: 8px 12px;
-    background: #eef3fb;
-    border-left: 3px solid #0d3b6e;
-    border-radius: 0 6px 6px 0;
-    font-size: .78rem; color: #1a3a6b; line-height: 2;
+    display: none; margin-top: 10px; padding: 8px 12px;
+    background: #eef3fb; border-left: 3px solid #0d3b6e;
+    border-radius: 0 6px 6px 0; font-size: .78rem; color: #1a3a6b; line-height: 2;
   }
-  #sources-box strong { font-weight: 700; }
   .src-chip {
-    display: inline-block; background: #fff;
-    border: 1px solid #a8c0e0; border-radius: 12px;
-    padding: 1px 10px; margin: 2px 4px 2px 0;
+    display: inline-block; background: #fff; border: 1px solid #a8c0e0;
+    border-radius: 12px; padding: 1px 10px; margin: 2px 4px 2px 0;
     font-size: .75rem; color: #0d3b6e; white-space: nowrap;
   }
   .src-chip em { font-style: normal; color: #5580b0; }
@@ -192,63 +116,28 @@
   /* ── 바이브/하네스 토글 ── */
   .mode-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
   .mode-label { font-size: .8rem; color: #555; }
-  .toggle-wrap {
-    display: flex; border: 2px solid #0d3b6e;
-    border-radius: 8px; overflow: hidden;
-    font-size: .8rem; font-weight: 700;
-  }
-  .toggle-wrap button {
-    padding: 5px 14px; border: none; border-radius: 0;
-    cursor: pointer; width: auto; font-weight: 700; font-size: .8rem;
-    transition: background .15s, color .15s;
-  }
+  .toggle-wrap { display: flex; border: 2px solid #0d3b6e; border-radius: 8px; overflow: hidden; }
+  .toggle-wrap button { padding: 5px 14px; border: none; border-radius: 0; cursor: pointer; width: auto; font-weight: 700; font-size: .8rem; transition: background .15s, color .15s; }
   .toggle-wrap .t-vibe, .toggle-wrap .t-harn { background: #fff; color: #0d3b6e; }
   .toggle-wrap .t-active { background: #0d3b6e; color: #fff; }
-
-  /* ── 참고 자료 (관리자 전용) ── */
-  .context-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  #reset-ctx {
-    font-size: .75rem; color: #0d3b6e;
-    background: none; border: 1px solid #0d3b6e;
-    border-radius: 5px; padding: 2px 8px; cursor: pointer; width: auto;
-  }
-  #reset-ctx:hover { background: #e8f0fb; }
-  #context { min-height: 200px; font-size: .82rem; color: #333; }
+  /* 관리자 전용 요소 */
+  .admin-only { display: none; }
+  body.admin-mode .admin-only { display: block; }
+  body.admin-mode .admin-only.flex-display { display: flex; }
 
   /* ── 빠른 질문 칩 ── */
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .chip {
-    font-size: .78rem; padding: 4px 12px;
-    border: 1.5px solid #0d3b6e; border-radius: 20px;
-    color: #0d3b6e; background: #f0f5fc;
-    cursor: pointer; transition: background .15s;
-    width: auto; font-weight: 500;
-  }
+  .chip { font-size: .78rem; padding: 4px 12px; border: 1.5px solid #0d3b6e; border-radius: 20px; color: #0d3b6e; background: #f0f5fc; cursor: pointer; transition: background .15s; width: auto; font-weight: 500; }
   .chip:hover { background: #dce8f8; }
 
   /* ── 오류 코드 빠른 검색 ── */
   .err-search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  #err-code-input {
-    flex: 1; min-width: 120px; max-width: 200px;
-    border: 1.5px solid #d0d8e4; border-radius: 8px;
-    padding: 8px 12px; font-size: .92rem; font-family: inherit;
-    background: #fafbfd; text-transform: uppercase; letter-spacing: .06em;
-    transition: border-color .2s;
-  }
+  #err-code-input { flex: 1; min-width: 120px; max-width: 200px; border: 1.5px solid #d0d8e4; border-radius: 8px; padding: 8px 12px; font-size: .92rem; font-family: inherit; background: #fafbfd; text-transform: uppercase; letter-spacing: .06em; transition: border-color .2s; }
   #err-code-input:focus { outline: none; border-color: #b03a2e; background: #fff; }
-  #err-search-btn {
-    width: auto; padding: 8px 18px; font-size: .88rem;
-    font-weight: 700; background: #b03a2e; border-radius: 8px; white-space: nowrap;
-  }
+  #err-search-btn { width: auto; padding: 8px 18px; font-size: .88rem; font-weight: 700; background: #b03a2e; border-radius: 8px; white-space: nowrap; }
   #err-search-btn:hover:not(:disabled) { background: #922e24; }
   .err-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .err-chip {
-    font-size: .82rem; padding: 5px 16px;
-    border: 2px solid #b03a2e; border-radius: 20px;
-    color: #b03a2e; background: #fdf2f1;
-    cursor: pointer; transition: background .15s, color .15s;
-    width: auto; font-weight: 700; letter-spacing: .04em;
-  }
+  .err-chip { font-size: .82rem; padding: 5px 16px; border: 2px solid #b03a2e; border-radius: 20px; color: #b03a2e; background: #fdf2f1; cursor: pointer; transition: background .15s, color .15s; width: auto; font-weight: 700; letter-spacing: .04em; }
   .err-chip:hover { background: #b03a2e; color: #fff; }
 
   /* ── 리콜 대조 ── */
@@ -258,39 +147,51 @@
   .recall-grid textarea { min-height: 120px; font-size: .8rem; }
   #recall-btn { margin-top: 12px; background: #1a6b3a; }
   #recall-btn:hover:not(:disabled) { background: #145730; }
-  .source-chip {
-    display: inline-block; margin-top: 8px;
-    font-size: .75rem; padding: 3px 10px;
-    border: 1px solid #1a6b3a; border-radius: 12px;
-    color: #1a6b3a; background: #edf7f1;
-  }
+  .source-chip { display: inline-block; margin-top: 8px; font-size: .75rem; padding: 3px 10px; border: 1px solid #1a6b3a; border-radius: 12px; color: #1a6b3a; background: #edf7f1; }
 
-  /* ── 관리자 전용 표시 ── */
-  .admin-only { display: none; }
-  body.admin-mode .admin-only { display: block; }
-  body.admin-mode .admin-only.flex-display { display: flex; }
+  /* ── 자료 업로드 ── */
+  .upload-drop-zone {
+    border: 2.5px dashed #a8c0e0; border-radius: 12px;
+    padding: 40px 20px; text-align: center; cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: #f7faff; color: #5577aa;
+  }
+  .upload-drop-zone:hover, .upload-drop-zone.dragover { border-color: #0d3b6e; background: #eef3fb; color: #0d3b6e; }
+  .upload-drop-zone .drop-icon { font-size: 2.4rem; margin-bottom: 8px; }
+  .upload-drop-zone p { font-size: .88rem; margin-bottom: 4px; }
+  .upload-drop-zone small { font-size: .75rem; color: #99aabb; }
+  #upload-btn {
+    margin-top: 12px; background: #1a5276;
+  }
+  #upload-btn:hover:not(:disabled) { background: #154360; }
+  #reset-docs-btn {
+    margin-top: 8px; background: #6c757d; font-size: .85rem; padding: 9px;
+  }
+  #reset-docs-btn:hover:not(:disabled) { background: #545b62; }
+  #upload-status { margin-top: 14px; font-size: .85rem; line-height: 1.6; }
+  #upload-status.ok   { color: #1a6b3a; }
+  #upload-status.err  { color: #c00; }
+  #upload-status.info { color: #0d3b6e; }
+  .upload-preview {
+    margin-top: 14px; background: #f4f7fb; border-radius: 8px;
+    padding: 12px 14px; font-size: .78rem; line-height: 1.6;
+    color: #334; max-height: 260px; overflow-y: auto;
+    border: 1px solid #d0d8e4; display: none;
+  }
+  .upload-preview h4 { font-size: .78rem; color: #0d3b6e; margin-bottom: 6px; }
+  .preview-chunk { border-bottom: 1px solid #dde4ef; padding-bottom: 8px; margin-bottom: 8px; }
+  .preview-chunk:last-child { border-bottom: none; margin-bottom: 0; }
+  .selected-file { font-size: .82rem; color: #0d3b6e; margin-top: 10px; font-weight: 600; }
+
+  /* 잠금 안내 */
+  .locked-notice { text-align: center; padding: 40px 20px; color: #888; font-size: .9rem; line-height: 2; }
+  .locked-notice button { display: inline-block; width: auto; padding: 8px 20px; font-size: .88rem; margin-top: 12px; background: #e8a020; }
+  .locked-notice button:hover { background: #c88010; }
 
   /* ── 모달 ── */
-  #modal-overlay {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,.55);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-  }
+  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 9999; align-items: center; justify-content: center; }
   #modal-overlay.open { display: flex; }
-  #modal {
-    background: #fff;
-    border-radius: 14px;
-    padding: 32px 28px;
-    width: 340px;
-    max-width: 90vw;
-    box-shadow: 0 8px 40px rgba(0,0,0,.3);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
+  #modal { background: #fff; border-radius: 14px; padding: 32px 28px; width: 340px; max-width: 90vw; box-shadow: 0 8px 40px rgba(0,0,0,.3); display: flex; flex-direction: column; gap: 14px; }
   #modal h2 { font-size: 1.05rem; font-weight: 700; color: #0d3b6e; }
   #modal p  { font-size: .82rem; color: #666; line-height: 1.5; }
   #modal-pw { font-size: .95rem; letter-spacing: .1em; }
@@ -299,24 +200,6 @@
   .modal-btns button { padding: 10px; font-size: .9rem; }
   #modal-cancel { background: #eee; color: #444; }
   #modal-cancel:hover { background: #ddd; }
-
-  /* 접근 제한 안내 (리콜 탭 잠김) */
-  .locked-notice {
-    text-align: center;
-    padding: 40px 20px;
-    color: #888;
-    font-size: .9rem;
-    line-height: 2;
-  }
-  .locked-notice button {
-    display: inline-block;
-    width: auto;
-    padding: 8px 20px;
-    font-size: .88rem;
-    margin-top: 12px;
-    background: #e8a020;
-  }
-  .locked-notice button:hover { background: #c88010; }
 </style>
 </head>
 <body>
@@ -328,10 +211,7 @@
     <div class="subtitle">주입펌프 수리 안내 · 참고 자료 기반 응답</div>
   </div>
   <div class="header-right">
-    <div id="status">
-      <div id="dot"></div>
-      <span id="status-text">연결 확인 중…</span>
-    </div>
+    <div id="status"><div id="dot"></div><span id="status-text">연결 확인 중…</span></div>
     <span id="admin-badge">🔑 관리자 모드</span>
     <button id="btn-admin-login" onclick="openAdminModal()">관리자 로그인</button>
   </div>
@@ -341,6 +221,7 @@
 <nav class="tab-nav">
   <button class="tab-btn tab-active" id="tab-failure" onclick="switchTab('failure')">🔧 고장 대응</button>
   <button class="tab-btn" id="tab-recall" onclick="switchTab('recall')">📋 리콜 확인</button>
+  <button class="tab-btn tab-admin" id="tab-upload" onclick="switchTab('upload')">📁 자료 업로드</button>
 </nav>
 
 <main>
@@ -352,7 +233,7 @@
     <div class="card">
       <div class="card-label">⚠ 오류 코드 빠른 검색</div>
       <div class="err-search-row">
-        <input id="err-code-input" type="text" placeholder="예) E12" maxlength="6"
+        <input id="err-code-input" type="text" placeholder="예) E12" maxlength="10"
                onkeydown="if(event.key==='Enter') searchErrCode()" />
         <button id="err-search-btn" onclick="searchErrCode()">코드 검색</button>
       </div>
@@ -362,15 +243,6 @@
         <button class="err-chip" onclick="searchErrCode('E21')">E21</button>
         <button class="err-chip" onclick="searchErrCode('E33')">E33</button>
       </div>
-    </div>
-
-    <!-- 참고 자료 (관리자 전용) -->
-    <div class="card admin-only">
-      <div class="context-header">
-        <div class="card-label">참고 자료 (매뉴얼 발췌) — 관리자</div>
-        <button id="reset-ctx" onclick="resetContext()">기본값 복원</button>
-      </div>
-      <textarea id="context"></textarea>
     </div>
 
     <!-- 질문 -->
@@ -411,16 +283,15 @@
   <!-- ══ 리콜 확인 패널 ══ -->
   <div id="panel-recall" class="tab-panel">
 
-    <!-- 비관리자: 접근 제한 안내 -->
+    <!-- 비관리자 잠금 안내 -->
     <div id="recall-locked" class="card locked-notice">
       🔒 리콜 확인 기능은 <strong>관리자 전용</strong>입니다.<br>
       관리자 비밀번호를 입력하면 이용할 수 있습니다.
-      <br>
-      <button onclick="openAdminModal()">관리자 로그인</button>
+      <br><button onclick="openAdminModal()">관리자 로그인</button>
     </div>
 
-    <!-- 관리자: 리콜 대조 -->
-    <div id="recall-content" class="card admin-only">
+    <!-- 관리자 전용 리콜 대조 -->
+    <div class="card admin-only">
       <div class="card-label">리콜 대조</div>
       <div class="recall-grid">
         <div>
@@ -443,13 +314,58 @@
 
   </div><!-- /panel-recall -->
 
+  <!-- ══ 자료 업로드 패널 (관리자 전용) ══ -->
+  <div id="panel-upload" class="tab-panel">
+    <div class="card">
+      <div class="card-label">📄 PDF 매뉴얼 업로드</div>
+
+      <!-- 드래그&드롭 영역 -->
+      <div class="upload-drop-zone" id="drop-zone"
+           onclick="document.getElementById('pdf-input').click()"
+           ondragover="onDragOver(event)"
+           ondragleave="onDragLeave(event)"
+           ondrop="onDrop(event)">
+        <div class="drop-icon">📂</div>
+        <p><strong>클릭하거나 PDF를 드래그해서 업로드</strong></p>
+        <small>스캔본(이미지 PDF)도 OCR로 자동 처리 · 문제 해결 / 오류 코드 섹션 자동 추출</small>
+      </div>
+      <input type="file" id="pdf-input" accept=".pdf" style="display:none"
+             onchange="onFileSelected(this)" />
+      <div id="selected-file" class="selected-file" style="display:none;"></div>
+
+      <button id="upload-btn" onclick="uploadPDF()" style="margin-top:12px;" disabled>
+        업로드 및 파싱 시작
+      </button>
+      <button id="reset-docs-btn" onclick="resetDocs()">
+        ↩ 업로드 자료 초기화 (내장 매뉴얼로 복원)
+      </button>
+
+      <div id="upload-status"></div>
+      <div class="upload-preview" id="upload-preview">
+        <h4>추출된 조각 미리보기 (앞 3개)</h4>
+        <div id="preview-content"></div>
+      </div>
+    </div>
+
+    <div class="card" style="background:#fffbf0; border:1px solid #f0d080;">
+      <div class="card-label" style="color:#7a5800;">📌 업로드 안내</div>
+      <ul style="font-size:.82rem; line-height:2; color:#555; padding-left:1.2em;">
+        <li>PDF에 <strong>문제 해결, Troubleshooting, Error Code</strong> 등 섹션이 있으면 자동 추출됩니다.</li>
+        <li>스캔 이미지 PDF도 지원합니다 (서버에 <code>pytesseract</code> + Tesseract-OCR 설치 필요).</li>
+        <li>업로드 자료는 내장 매뉴얼 DOCS에 <strong>추가</strong>되어 함께 검색됩니다.</li>
+        <li>새 파일을 업로드하면 이전 업로드 자료는 <strong>교체</strong>됩니다.</li>
+        <li>서버를 재시작하면 업로드 자료는 초기화됩니다.</li>
+      </ul>
+    </div>
+  </div><!-- /panel-upload -->
+
 </main>
 
 <!-- ── 관리자 로그인 모달 ── -->
 <div id="modal-overlay">
   <div id="modal">
     <h2>🔑 관리자 로그인</h2>
-    <p>관리자 비밀번호를 입력하면 참고 자료 편집, 바이브 모드, 리콜 확인 기능을 사용할 수 있습니다.</p>
+    <p>관리자 비밀번호를 입력하면 자료 업로드, 바이브 모드, 리콜 확인 기능을 사용할 수 있습니다.</p>
     <input id="modal-pw" type="password" placeholder="비밀번호 입력"
            onkeydown="if(event.key==='Enter') confirmAdmin()" />
     <div id="modal-err"></div>
@@ -466,55 +382,9 @@
   const ADMIN_PASS = "admin1234";   // ← 비밀번호 변경 시 여기만 수정
 
   // ── 상태 ─────────────────────────────────────────────────────────────
-  let isAdmin  = false;
-  let bareMode = false;   // false = 하네스(기본/사용자), true = 바이브(관리자만)
+  let isAdmin   = false;
+  let bareMode  = false;
   let activeTab = "failure";
-
-  // ── 기본 참고 자료 ───────────────────────────────────────────────────
-  const DEFAULT_CONTEXT = `[DI-2200P 주입펌프 수리 매뉴얼 발췌 — 샘플]
-
-1) 폐색 알람(Occlusion / 알람코드 AL-OCC) — p.42
-증상: 주입 중 "폐색" 경고음과 함께 펌프 정지.
-점검: ① 라인 꺾임·눌림 확인 ② 클램프(잠금) 열림 확인 ③ 필터·삼방활전 막힘 확인.
-조치: 막힌 원인 해소 후 [재개] 버튼. 해소 후에도 지속되면 압력센서 점검 대상 → 서비스 요청.
-
-2) 압력 상승 경고(High Pressure / 알람코드 AL-PRS) — p.43
-증상: 주입압이 설정 상한을 넘으면 경고.
-점검: 카테터 위치·환자 자세·라인 길이 확인, 점도 높은 약액 여부 확인.
-조치: 원인 제거 후 압력 상한 재설정. 반복되면 압력센서 캘리브레이션 필요(자격 기술자).
-
-3) 배터리 점검·교체 — p.61
-기준: 완충 후 연속 사용시간 표시 확인.
-만충 대비 80% 미만이면 배터리 교체 대상.
-주의: 정품 배터리만 사용, 임의 분해 금지.
-교체 후 충전 사이클 1회 권장.
-
-4) 센서 오류 코드 모음 — p.78
-E12: 공기방울 감지센서 커넥터 접촉 불량 → 커넥터 재결합 후 전원 재시작.
-E15: 압력센서 신호 불안정 → 캘리브레이션 필요(자격 기술자 전용).
-E21: 도어 닫힘 감지 실패 → 도어 래치·자석 위치 확인.
-E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
-
-5) 공기 알람(Air-in-line / 알람코드 AL-AIR) — p.45
-증상: 라인 내 기포 감지 시 정지.
-점검: 챔버 액위, 라인 프라이밍 상태, 센서 창 오염 확인.
-조치: 라인 재프라이밍·기포 제거 후 재개. 센서 창 이물은 마른 천으로 닦기.
-
-6) 세척·소독 절차 — p.90
-외장: 전원 차단 후 중성세제 적신 천으로 닦고 건조. 분무·침수 금지.
-소독: 70% 알코올 천 사용 가능, 화면·센서 창은 강한 용제 금지.
-주기: 환자 교체 시마다 외장 소독 권장.
-
-7) 정기 점검 항목 — p.102
-일일: 알람음·화면 표시·배터리 잔량 확인.
-월간: 압력센서 동작, 도어 래치, 충전 상태 점검.
-연간: 압력센서 캘리브레이션, 누설전류 측정(자격 기술자·점검 기록보관).
-
-8) 작업 안전 원칙 — p.7
-본 매뉴얼의 점검·조치는 자격 갖춘 기술자 전용. 임의 분해·내부 회로 수리·부품 개조 금지. 의심 시 제조사 서비스 요청.
-환자 연결 상태에서의 점검은 금지(반드시 라인 분리 후).`;
-
-  document.getElementById("context").value = DEFAULT_CONTEXT;
 
   // ── DOM 참조 ─────────────────────────────────────────────────────────
   const dot        = document.getElementById("dot");
@@ -550,73 +420,48 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
     document.getElementById("admin-badge").classList.toggle("visible", admin);
     document.getElementById("btn-admin-login").textContent = admin ? "로그아웃" : "관리자 로그인";
     document.getElementById("btn-admin-login").onclick     = admin ? doLogout : openAdminModal;
-
-    // 리콜 탭 잠금 표시
-    const recallTab = document.getElementById("tab-recall");
-    recallTab.classList.toggle("tab-locked", !admin);
-
-    // 리콜 패널 내 잠금 안내 / 콘텐츠 가시성
-    document.getElementById("recall-locked").style.display  = admin ? "none"  : "block";
-
-    // 관리자 로그아웃 시 리콜 탭에 있으면 고장 대응으로 이동
-    if (!admin && activeTab === "recall") switchTab("failure");
-
-    // 사용자 모드에서 하네스 강제
+    document.getElementById("recall-locked").style.display = admin ? "none" : "block";
     if (!admin) {
       bareMode = false;
       document.getElementById("btn-harn").classList.add("t-active");
       document.getElementById("btn-vibe").classList.remove("t-active");
       document.getElementById("mode-desc").textContent = "검색 + 출처 표시";
+      if (activeTab === "recall" || activeTab === "upload") switchTab("failure");
     }
   }
+  function doLogout() { applyAdminMode(false); }
 
-  function doLogout() {
-    applyAdminMode(false);
-    if (activeTab === "recall") switchTab("failure");
-  }
-
-  // ── 관리자 모달 ──────────────────────────────────────────────────────
+  // ── 모달 ─────────────────────────────────────────────────────────────
   function openAdminModal() {
-    document.getElementById("modal-pw").value  = "";
+    document.getElementById("modal-pw").value = "";
     document.getElementById("modal-err").textContent = "";
     document.getElementById("modal-overlay").classList.add("open");
     setTimeout(() => document.getElementById("modal-pw").focus(), 80);
   }
-  function closeAdminModal() {
-    document.getElementById("modal-overlay").classList.remove("open");
-  }
+  function closeAdminModal() { document.getElementById("modal-overlay").classList.remove("open"); }
   function confirmAdmin() {
-    const pw = document.getElementById("modal-pw").value;
-    if (pw === ADMIN_PASS) {
-      closeAdminModal();
-      applyAdminMode(true);
+    if (document.getElementById("modal-pw").value === ADMIN_PASS) {
+      closeAdminModal(); applyAdminMode(true);
     } else {
       document.getElementById("modal-err").textContent = "비밀번호가 올바르지 않습니다.";
       document.getElementById("modal-pw").value = "";
       document.getElementById("modal-pw").focus();
     }
   }
-  // 오버레이 클릭으로 닫기
   document.getElementById("modal-overlay").addEventListener("click", e => {
     if (e.target === document.getElementById("modal-overlay")) closeAdminModal();
   });
 
   // ── 유틸 ─────────────────────────────────────────────────────────────
-  function resetContext() { document.getElementById("context").value = DEFAULT_CONTEXT; }
-  function setQ(text) {
-    document.getElementById("question").value = text;
-    document.getElementById("question").focus();
-  }
+  function setQ(text) { document.getElementById("question").value = text; document.getElementById("question").focus(); }
   function clearAnswer() {
     answerBox.textContent = "답변이 여기에 표시됩니다.";
     answerBox.className = "empty";
     document.getElementById("sources-box").style.display = "none";
     document.getElementById("sources-box").innerHTML = "";
   }
-
-  // ── 바이브/하네스 토글 (관리자만 호출 가능) ──────────────────────────
   function setMode(vibe) {
-    if (!isAdmin) return;   // 사용자 모드에서는 무시
+    if (!isAdmin) return;
     bareMode = vibe;
     document.getElementById("btn-vibe").classList.toggle("t-active",  vibe);
     document.getElementById("btn-harn").classList.toggle("t-active", !vibe);
@@ -627,51 +472,41 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
   function searchErrCode(code) {
     const raw = (code ?? document.getElementById("err-code-input").value).trim().toUpperCase();
     if (!raw) { alert("오류 코드를 입력하거나 칩을 선택하세요."); return; }
-    // 항상 하네스 모드 (사용자/관리자 모두)
     if (bareMode) setMode(false);
-    document.getElementById("question").value =
-      `오류 코드 ${raw}의 의미와 조치를 매뉴얼 근거로 알려줘.`;
+    document.getElementById("question").value = `오류 코드 ${raw}의 의미와 조치를 매뉴얼 근거로 알려줘.`;
     document.getElementById("err-code-input").value = raw;
+    switchTab("failure");
     sendQuestion();
   }
 
   // ── 질문 전송 ────────────────────────────────────────────────────────
   async function sendQuestion() {
     const question = document.getElementById("question").value.trim();
-    const context  = document.getElementById("context").value.trim();
     if (!question) { alert("질문을 입력해 주세요."); return; }
-
-    // 사용자 모드는 항상 하네스
     const useBare = isAdmin ? bareMode : false;
-
     const sourcesBox = document.getElementById("sources-box");
     sendBtn.disabled = true;
     answerBox.className = "streaming";
     answerBox.innerHTML = '<span class="cursor"></span>';
     sourcesBox.style.display = "none";
     sourcesBox.innerHTML = "";
-
     let accumulated = "";
-
     try {
       const res = await fetch(BE + "/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, context, bare: useBare }),
+        body: JSON.stringify({ question, context: "", bare: useBare }),
       });
       if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
-
-      const reader  = res.body.getReader();
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let   buffer  = "";
-
+      let buffer = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop();
-
         for (const line of lines) {
           if (!line.startsWith("data:")) continue;
           const raw = line.slice(5).trim();
@@ -686,14 +521,11 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
               sourcesBox.style.display = "block";
             } else {
               accumulated += parsed.token ?? "";
-              answerBox.innerHTML =
-                accumulated.replace(/</g, "&lt;").replace(/>/g, "&gt;")
-                + '<span class="cursor"></span>';
+              answerBox.innerHTML = accumulated.replace(/</g,"&lt;").replace(/>/g,"&gt;") + '<span class="cursor"></span>';
             }
-          } catch { /* 무시 */ }
+          } catch {}
         }
       }
-
       answerBox.textContent = accumulated || "응답 없음";
       answerBox.className = "";
     } catch (err) {
@@ -704,10 +536,104 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
       sendBtn.disabled = false;
     }
   }
-
   document.getElementById("question").addEventListener("keydown", e => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendQuestion();
   });
+
+  // ── PDF 업로드 ───────────────────────────────────────────────────────
+  let selectedFile = null;
+
+  function onFileSelected(input) {
+    selectedFile = input.files[0] ?? null;
+    const el = document.getElementById("selected-file");
+    if (selectedFile) {
+      el.textContent = `선택된 파일: ${selectedFile.name}  (${(selectedFile.size/1024).toFixed(0)} KB)`;
+      el.style.display = "block";
+      document.getElementById("upload-btn").disabled = false;
+    } else {
+      el.style.display = "none";
+      document.getElementById("upload-btn").disabled = true;
+    }
+    document.getElementById("upload-preview").style.display = "none";
+    document.getElementById("upload-status").textContent = "";
+    document.getElementById("upload-status").className = "";
+  }
+
+  function onDragOver(e) { e.preventDefault(); document.getElementById("drop-zone").classList.add("dragover"); }
+  function onDragLeave() { document.getElementById("drop-zone").classList.remove("dragover"); }
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById("drop-zone").classList.remove("dragover");
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const inp = document.getElementById("pdf-input");
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    inp.files = dt.files;
+    onFileSelected(inp);
+  }
+
+  function setUploadStatus(type, msg) {
+    const el = document.getElementById("upload-status");
+    el.className = type;
+    el.textContent = msg;
+  }
+
+  async function uploadPDF() {
+    if (!selectedFile) return;
+    const btn = document.getElementById("upload-btn");
+    btn.disabled = true;
+    setUploadStatus("info", "⏳ 업로드 중… PDF 파싱 및 OCR(필요 시)에 시간이 걸릴 수 있습니다.");
+    document.getElementById("upload-preview").style.display = "none";
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const res = await fetch(BE + "/api/upload-pdf", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.ok) {
+        const ocrNote = data.ocr_used ? " (OCR 사용)" : "";
+        setUploadStatus("ok",
+          `✅ 완료${ocrNote} — ${data.pages_processed}페이지 처리, ${data.chunks_extracted}개 조각 추출 · 검색에 즉시 반영됩니다.`
+        );
+        // 미리보기 렌더링
+        const previewEl = document.getElementById("upload-preview");
+        const contentEl = document.getElementById("preview-content");
+        contentEl.innerHTML = (data.preview ?? []).map(chunk =>
+          `<div class="preview-chunk">${chunk.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>`
+        ).join("");
+        previewEl.style.display = "block";
+      } else {
+        setUploadStatus("err", `❌ ${data.error ?? "알 수 없는 오류"}`);
+        if (data.pages_processed !== undefined) {
+          setUploadStatus("err",
+            `❌ ${data.error}  (처리 페이지: ${data.pages_processed}${data.ocr_used ? ", OCR 사용" : ""})`
+          );
+        }
+      }
+    } catch (err) {
+      setUploadStatus("err", `❌ 네트워크 오류: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function resetDocs() {
+    setUploadStatus("info", "초기화 중…");
+    try {
+      const res  = await fetch(BE + "/api/reset-docs", { method: "POST" });
+      const data = await res.json();
+      setUploadStatus("ok", `✅ ${data.message}`);
+      document.getElementById("upload-preview").style.display = "none";
+      selectedFile = null;
+      document.getElementById("selected-file").style.display = "none";
+      document.getElementById("pdf-input").value = "";
+      document.getElementById("upload-btn").disabled = true;
+    } catch (err) {
+      setUploadStatus("err", `❌ ${err.message}`);
+    }
+  }
 
   // ── 리콜 대조 ────────────────────────────────────────────────────────
   async function runRecallCheck() {
@@ -716,22 +642,16 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
     try {
       inventory    = JSON.parse(document.getElementById("recall-inventory").value);
       recallNotice = JSON.parse(document.getElementById("recall-notice").value);
-    } catch {
-      alert("JSON 형식이 올바르지 않습니다. 입력값을 확인해 주세요."); return;
-    }
+    } catch { alert("JSON 형식이 올바르지 않습니다."); return; }
 
     const recallBtn  = document.getElementById("recall-btn");
     const sourceChip = document.getElementById("source-chip");
-
     recallBtn.disabled = true;
     sourceChip.style.display = "none";
+    switchTab("failure");
     answerBox.className = "streaming";
     answerBox.innerHTML = '<span class="cursor"></span>';
-    // 답변 박스를 보이게 고장 대응 탭으로 이동
-    switchTab("failure");
-
     let accumulated = "";
-
     try {
       const res = await fetch(BE + "/api/recall-check", {
         method: "POST",
@@ -739,50 +659,39 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
         body: JSON.stringify({ inventory, recall_notice: recallNotice }),
       });
       if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
-
-      const reader  = res.body.getReader();
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let   buffer  = "";
-      let   metaInfo = null;
-
+      let buffer = "", metaInfo = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop();
-
         for (const line of lines) {
           if (!line.startsWith("data:")) continue;
           const raw = line.slice(5).trim();
           if (raw === "[DONE]") continue;
           try {
             const parsed = JSON.parse(raw);
-            if (parsed.type === "meta") {
-              metaInfo = parsed;
-            } else {
+            if (parsed.type === "meta") { metaInfo = parsed; }
+            else {
               accumulated += parsed.token || "";
-              answerBox.innerHTML =
-                accumulated.replace(/</g, "&lt;").replace(/>/g, "&gt;")
-                + '<span class="cursor"></span>';
+              answerBox.innerHTML = accumulated.replace(/</g,"&lt;").replace(/>/g,"&gt;") + '<span class="cursor"></span>';
             }
-          } catch { /* 무시 */ }
+          } catch {}
         }
       }
-
       answerBox.textContent = accumulated || "응답 없음";
       answerBox.className = "";
       if (metaInfo) {
         sourceChip.textContent =
-          `근거: /api/recall-check 코드 계산값 — ` +
-          `대상 ${metaInfo.matched}건(${metaInfo.matched_lots.join(", ") || "없음"}), ` +
-          `대상 아님 ${metaInfo.safe}건(${metaInfo.safe_lots.join(", ") || "없음"})`;
+          `근거: /api/recall-check 코드 계산값 — 대상 ${metaInfo.matched}건(${metaInfo.matched_lots.join(", ") || "없음"}), 대상 아님 ${metaInfo.safe}건(${metaInfo.safe_lots.join(", ") || "없음"})`;
       }
       sourceChip.style.display = "inline-block";
     } catch (err) {
       answerBox.textContent = "오류: " + err.message;
       answerBox.className = "err-state";
-      dot.className = "err"; statusText.textContent = "요청 실패";
     } finally {
       recallBtn.disabled = false;
     }
