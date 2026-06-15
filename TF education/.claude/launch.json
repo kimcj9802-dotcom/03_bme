@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "FastAPI 백엔드 (:8000)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "app:app", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "정적 파일 서버 (:5500)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5500"],
+      "port": 5500
+    }
+  ]
+}
