@@ -8,44 +8,90 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f4f8; color: #222; min-height: 100vh; }
 
+  /* ── 헤더 ── */
   header {
     background: #0d3b6e;
     color: #fff;
-    padding: 14px 24px;
+    padding: 12px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    gap: 16px;
   }
-  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: .01em; }
-  header .subtitle { font-size: .75rem; color: #a8c4e0; margin-top: 2px; }
+  header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: .01em; }
+  .subtitle  { font-size: .72rem; color: #a8c4e0; margin-top: 2px; }
 
-  #status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: .82rem;
-    white-space: nowrap;
-  }
+  #status { display: flex; align-items: center; gap: 8px; font-size: .82rem; white-space: nowrap; }
   #dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: #aaa;
-    transition: background .3s;
-    flex-shrink: 0;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #aaa; transition: background .3s; flex-shrink: 0;
   }
   #dot.ok  { background: #4caf50; }
   #dot.err { background: #f44336; }
 
-  main {
-    max-width: 900px;
-    margin: 28px auto;
-    padding: 0 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  /* 관리자 영역 (헤더 우측) */
+  .header-right { display: flex; align-items: center; gap: 14px; }
+  #admin-badge {
+    display: none;
+    font-size: .75rem;
+    background: #e8a020;
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 700;
+    white-space: nowrap;
   }
+  #admin-badge.visible { display: inline-block; }
+  #btn-admin-login {
+    font-size: .78rem;
+    padding: 5px 14px;
+    background: rgba(255,255,255,.15);
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,.4);
+    border-radius: 7px;
+    cursor: pointer;
+    width: auto;
+    font-weight: 600;
+    transition: background .15s;
+    white-space: nowrap;
+  }
+  #btn-admin-login:hover { background: rgba(255,255,255,.28); }
 
+  /* ── 탭 네비게이션 ── */
+  .tab-nav {
+    background: #0a2f58;
+    display: flex;
+    padding: 0 24px;
+    gap: 4px;
+    border-bottom: 3px solid #093050;
+  }
+  .tab-btn {
+    padding: 10px 22px;
+    font-size: .9rem;
+    font-weight: 700;
+    color: #a8c4e0;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px;
+    cursor: pointer;
+    width: auto;
+    transition: color .15s, border-color .15s;
+    letter-spacing: .01em;
+  }
+  .tab-btn:hover { color: #fff; }
+  .tab-btn.tab-active { color: #fff; border-bottom-color: #4db6ff; }
+  .tab-btn.tab-locked { color: #5577aa; cursor: default; }
+  .tab-btn.tab-locked:hover { color: #7799bb; }
+
+  /* ── 메인 레이아웃 ── */
+  main { max-width: 900px; margin: 24px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 16px; }
+
+  .tab-panel { display: none; flex-direction: column; gap: 16px; }
+  .tab-panel.panel-active { display: flex; }
+
+  /* ── 카드 ── */
   .card {
     background: #fff;
     border-radius: 12px;
@@ -53,7 +99,7 @@
     padding: 18px 20px;
   }
   .card-label {
-    font-size: .75rem;
+    font-size: .74rem;
     font-weight: 700;
     color: #0d3b6e;
     text-transform: uppercase;
@@ -61,41 +107,23 @@
     margin-bottom: 8px;
   }
 
-  textarea {
+  /* ── 입력 ── */
+  textarea, input[type="text"], input[type="password"] {
     width: 100%;
     border: 1.5px solid #d0d8e4;
     border-radius: 8px;
     padding: 10px 12px;
     font-size: .9rem;
     font-family: inherit;
-    resize: vertical;
     transition: border-color .2s;
     background: #fafbfd;
     line-height: 1.6;
   }
-  textarea:focus { outline: none; border-color: #0d3b6e; background: #fff; }
-
+  textarea { resize: vertical; }
+  textarea:focus, input:focus { outline: none; border-color: #0d3b6e; background: #fff; }
   #question { min-height: 68px; }
-  #context  { min-height: 240px; font-size: .82rem; color: #333; }
 
-  .context-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  #reset-ctx {
-    font-size: .75rem;
-    color: #0d3b6e;
-    background: none;
-    border: 1px solid #0d3b6e;
-    border-radius: 5px;
-    padding: 2px 8px;
-    cursor: pointer;
-    width: auto;
-  }
-  #reset-ctx:hover { background: #e8f0fb; }
-
+  /* ── 버튼 기본 ── */
   button {
     width: 100%;
     padding: 13px;
@@ -111,6 +139,7 @@
   button:hover:not(:disabled) { background: #0a2f58; }
   button:disabled { opacity: .45; cursor: not-allowed; }
 
+  /* ── 답변 박스 ── */
   #answer-box {
     min-height: 180px;
     border: 1.5px solid #d0d8e4;
@@ -123,289 +152,325 @@
     word-break: break-word;
     color: #222;
   }
-  #answer-box.empty { color: #aaa; font-style: italic; }
+  #answer-box.empty    { color: #aaa; font-style: italic; }
   #answer-box.streaming { border-color: #0d3b6e; }
   #answer-box.err-state { border-color: #f44336; color: #c00; }
 
   .cursor {
-    display: inline-block;
-    width: 2px; height: 1em;
-    background: #0d3b6e;
-    animation: blink .7s steps(1) infinite;
-    vertical-align: text-bottom;
-    margin-left: 1px;
+    display: inline-block; width: 2px; height: 1em;
+    background: #0d3b6e; animation: blink .7s steps(1) infinite;
+    vertical-align: text-bottom; margin-left: 1px;
   }
   @keyframes blink { 50% { opacity: 0; } }
 
-  .answer-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
+  .answer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   #clear-btn {
-    background: none;
-    border: none;
-    color: #888;
-    font-size: .78rem;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 4px;
-    width: auto;
-    font-weight: 400;
+    background: none; border: none; color: #888;
+    font-size: .78rem; cursor: pointer; padding: 2px 6px;
+    border-radius: 4px; width: auto; font-weight: 400;
   }
   #clear-btn:hover { background: #f0f0f0; color: #444; }
 
-  /* 리콜 대조 */
-  .recall-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-  @media (max-width: 600px) { .recall-grid { grid-template-columns: 1fr; } }
-  .recall-grid label { font-size: .75rem; font-weight: 600; color: #555; display: block; margin-bottom: 4px; }
-  .recall-grid textarea { min-height: 120px; font-size: .8rem; }
-  #recall-btn {
-    margin-top: 12px;
-    background: #1a6b3a;
-  }
-  #recall-btn:hover:not(:disabled) { background: #145730; }
-  .source-chip {
-    display: inline-block;
-    margin-top: 8px;
-    font-size: .75rem;
-    padding: 3px 10px;
-    border: 1px solid #1a6b3a;
-    border-radius: 12px;
-    color: #1a6b3a;
-    background: #edf7f1;
-  }
-
-  /* 바이브 ↔ 하네스 토글 */
-  .mode-bar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 6px;
-  }
-  .mode-label { font-size: .8rem; color: #555; }
-  .toggle-wrap {
-    display: flex;
-    border: 2px solid #0d3b6e;
-    border-radius: 8px;
-    overflow: hidden;
-    font-size: .8rem;
-    font-weight: 700;
-  }
-  .toggle-wrap button {
-    padding: 5px 14px;
-    border: none;
-    border-radius: 0;
-    cursor: pointer;
-    width: auto;
-    font-weight: 700;
-    font-size: .8rem;
-    transition: background .15s, color .15s;
-  }
-  .toggle-wrap .t-vibe  { background: #fff; color: #0d3b6e; }
-  .toggle-wrap .t-harn  { background: #fff; color: #0d3b6e; }
-  .toggle-wrap .t-active { background: #0d3b6e; color: #fff; }
-
-  /* 출처 영역 */
+  /* ── 출처 박스 ── */
   #sources-box {
     display: none;
-    margin-top: 10px;
-    padding: 8px 12px;
+    margin-top: 10px; padding: 8px 12px;
     background: #eef3fb;
     border-left: 3px solid #0d3b6e;
     border-radius: 0 6px 6px 0;
-    font-size: .78rem;
-    color: #1a3a6b;
-    line-height: 2;
+    font-size: .78rem; color: #1a3a6b; line-height: 2;
   }
   #sources-box strong { font-weight: 700; }
   .src-chip {
-    display: inline-block;
-    background: #fff;
-    border: 1px solid #a8c0e0;
-    border-radius: 12px;
-    padding: 1px 10px;
-    margin: 2px 4px 2px 0;
-    font-size: .75rem;
-    color: #0d3b6e;
-    white-space: nowrap;
+    display: inline-block; background: #fff;
+    border: 1px solid #a8c0e0; border-radius: 12px;
+    padding: 1px 10px; margin: 2px 4px 2px 0;
+    font-size: .75rem; color: #0d3b6e; white-space: nowrap;
   }
   .src-chip em { font-style: normal; color: #5580b0; }
 
-  /* 빠른 질문 칩 */
+  /* ── 바이브/하네스 토글 ── */
+  .mode-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .mode-label { font-size: .8rem; color: #555; }
+  .toggle-wrap {
+    display: flex; border: 2px solid #0d3b6e;
+    border-radius: 8px; overflow: hidden;
+    font-size: .8rem; font-weight: 700;
+  }
+  .toggle-wrap button {
+    padding: 5px 14px; border: none; border-radius: 0;
+    cursor: pointer; width: auto; font-weight: 700; font-size: .8rem;
+    transition: background .15s, color .15s;
+  }
+  .toggle-wrap .t-vibe, .toggle-wrap .t-harn { background: #fff; color: #0d3b6e; }
+  .toggle-wrap .t-active { background: #0d3b6e; color: #fff; }
+
+  /* ── 참고 자료 (관리자 전용) ── */
+  .context-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  #reset-ctx {
+    font-size: .75rem; color: #0d3b6e;
+    background: none; border: 1px solid #0d3b6e;
+    border-radius: 5px; padding: 2px 8px; cursor: pointer; width: auto;
+  }
+  #reset-ctx:hover { background: #e8f0fb; }
+  #context { min-height: 200px; font-size: .82rem; color: #333; }
+
+  /* ── 빠른 질문 칩 ── */
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .chip {
-    font-size: .78rem;
-    padding: 4px 12px;
-    border: 1.5px solid #0d3b6e;
-    border-radius: 20px;
-    color: #0d3b6e;
-    background: #f0f5fc;
-    cursor: pointer;
-    transition: background .15s;
-    width: auto;
-    font-weight: 500;
+    font-size: .78rem; padding: 4px 12px;
+    border: 1.5px solid #0d3b6e; border-radius: 20px;
+    color: #0d3b6e; background: #f0f5fc;
+    cursor: pointer; transition: background .15s;
+    width: auto; font-weight: 500;
   }
   .chip:hover { background: #dce8f8; }
 
-  /* 오류 코드 빠른 검색 패널 */
-  .err-search-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
+  /* ── 오류 코드 빠른 검색 ── */
+  .err-search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   #err-code-input {
-    flex: 1;
-    min-width: 120px;
-    max-width: 200px;
-    border: 1.5px solid #d0d8e4;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: .92rem;
-    font-family: inherit;
-    background: #fafbfd;
-    text-transform: uppercase;
-    letter-spacing: .06em;
+    flex: 1; min-width: 120px; max-width: 200px;
+    border: 1.5px solid #d0d8e4; border-radius: 8px;
+    padding: 8px 12px; font-size: .92rem; font-family: inherit;
+    background: #fafbfd; text-transform: uppercase; letter-spacing: .06em;
     transition: border-color .2s;
   }
   #err-code-input:focus { outline: none; border-color: #b03a2e; background: #fff; }
   #err-search-btn {
-    width: auto;
-    padding: 8px 18px;
-    font-size: .88rem;
-    font-weight: 700;
-    background: #b03a2e;
-    border-radius: 8px;
-    white-space: nowrap;
+    width: auto; padding: 8px 18px; font-size: .88rem;
+    font-weight: 700; background: #b03a2e; border-radius: 8px; white-space: nowrap;
   }
   #err-search-btn:hover:not(:disabled) { background: #922e24; }
   .err-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .err-chip {
-    font-size: .82rem;
-    padding: 5px 16px;
-    border: 2px solid #b03a2e;
-    border-radius: 20px;
-    color: #b03a2e;
-    background: #fdf2f1;
-    cursor: pointer;
-    transition: background .15s, color .15s;
-    width: auto;
-    font-weight: 700;
-    letter-spacing: .04em;
+    font-size: .82rem; padding: 5px 16px;
+    border: 2px solid #b03a2e; border-radius: 20px;
+    color: #b03a2e; background: #fdf2f1;
+    cursor: pointer; transition: background .15s, color .15s;
+    width: auto; font-weight: 700; letter-spacing: .04em;
   }
   .err-chip:hover { background: #b03a2e; color: #fff; }
+
+  /* ── 리콜 대조 ── */
+  .recall-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 600px) { .recall-grid { grid-template-columns: 1fr; } }
+  .recall-grid label { font-size: .75rem; font-weight: 600; color: #555; display: block; margin-bottom: 4px; }
+  .recall-grid textarea { min-height: 120px; font-size: .8rem; }
+  #recall-btn { margin-top: 12px; background: #1a6b3a; }
+  #recall-btn:hover:not(:disabled) { background: #145730; }
+  .source-chip {
+    display: inline-block; margin-top: 8px;
+    font-size: .75rem; padding: 3px 10px;
+    border: 1px solid #1a6b3a; border-radius: 12px;
+    color: #1a6b3a; background: #edf7f1;
+  }
+
+  /* ── 관리자 전용 표시 ── */
+  .admin-only { display: none; }
+  body.admin-mode .admin-only { display: block; }
+  body.admin-mode .admin-only.flex-display { display: flex; }
+
+  /* ── 모달 ── */
+  #modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+  }
+  #modal-overlay.open { display: flex; }
+  #modal {
+    background: #fff;
+    border-radius: 14px;
+    padding: 32px 28px;
+    width: 340px;
+    max-width: 90vw;
+    box-shadow: 0 8px 40px rgba(0,0,0,.3);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #modal h2 { font-size: 1.05rem; font-weight: 700; color: #0d3b6e; }
+  #modal p  { font-size: .82rem; color: #666; line-height: 1.5; }
+  #modal-pw { font-size: .95rem; letter-spacing: .1em; }
+  #modal-err { font-size: .78rem; color: #c00; min-height: 1em; }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns button { padding: 10px; font-size: .9rem; }
+  #modal-cancel { background: #eee; color: #444; }
+  #modal-cancel:hover { background: #ddd; }
+
+  /* 접근 제한 안내 (리콜 탭 잠김) */
+  .locked-notice {
+    text-align: center;
+    padding: 40px 20px;
+    color: #888;
+    font-size: .9rem;
+    line-height: 2;
+  }
+  .locked-notice button {
+    display: inline-block;
+    width: auto;
+    padding: 8px 20px;
+    font-size: .88rem;
+    margin-top: 12px;
+    background: #e8a020;
+  }
+  .locked-notice button:hover { background: #c88010; }
 </style>
 </head>
 <body>
 
+<!-- ── 헤더 ── -->
 <header>
   <div>
-    <div class="h1-wrap">
-      <h1>의료기기 수리 매뉴얼 챗봇 (DI-2200P)</h1>
-    </div>
+    <h1>의료기기 수리 매뉴얼 챗봇 (DI-2200P)</h1>
     <div class="subtitle">주입펌프 수리 안내 · 참고 자료 기반 응답</div>
   </div>
-  <div id="status">
-    <div id="dot"></div>
-    <span id="status-text">연결 확인 중…</span>
+  <div class="header-right">
+    <div id="status">
+      <div id="dot"></div>
+      <span id="status-text">연결 확인 중…</span>
+    </div>
+    <span id="admin-badge">🔑 관리자 모드</span>
+    <button id="btn-admin-login" onclick="openAdminModal()">관리자 로그인</button>
   </div>
 </header>
 
+<!-- ── 탭 네비게이션 ── -->
+<nav class="tab-nav">
+  <button class="tab-btn tab-active" id="tab-failure" onclick="switchTab('failure')">🔧 고장 대응</button>
+  <button class="tab-btn" id="tab-recall" onclick="switchTab('recall')">📋 리콜 확인</button>
+</nav>
+
 <main>
 
-  <!-- 오류 코드 빠른 검색 -->
-  <div class="card">
-    <div class="card-label">⚠ 오류 코드 빠른 검색</div>
-    <div class="err-search-row">
-      <input id="err-code-input" type="text" placeholder="예) E12" maxlength="6"
-             onkeydown="if(event.key==='Enter') searchErrCode()" />
-      <button id="err-search-btn" onclick="searchErrCode()">코드 검색</button>
-    </div>
-    <div class="err-chips">
-      <button class="err-chip" onclick="searchErrCode('E12')">E12</button>
-      <button class="err-chip" onclick="searchErrCode('E15')">E15</button>
-      <button class="err-chip" onclick="searchErrCode('E21')">E21</button>
-      <button class="err-chip" onclick="searchErrCode('E33')">E33</button>
-    </div>
-  </div>
+  <!-- ══ 고장 대응 패널 ══ -->
+  <div id="panel-failure" class="tab-panel panel-active">
 
-  <!-- 참고 자료 -->
-  <div class="card">
-    <div class="context-header">
-      <div class="card-label">참고 자료 (매뉴얼 발췌)</div>
-      <button id="reset-ctx" onclick="resetContext()">기본값 복원</button>
-    </div>
-    <textarea id="context"></textarea>
-  </div>
-
-  <!-- 질문 -->
-  <div class="card">
-    <div class="mode-bar">
-      <span class="mode-label">응답 모드:</span>
-      <div class="toggle-wrap">
-        <button class="t-vibe" id="btn-vibe" onclick="setMode(true)">⚡ 바이브</button>
-        <button class="t-harn t-active" id="btn-harn" onclick="setMode(false)">🔍 하네스</button>
+    <!-- 오류 코드 빠른 검색 -->
+    <div class="card">
+      <div class="card-label">⚠ 오류 코드 빠른 검색</div>
+      <div class="err-search-row">
+        <input id="err-code-input" type="text" placeholder="예) E12" maxlength="6"
+               onkeydown="if(event.key==='Enter') searchErrCode()" />
+        <button id="err-search-btn" onclick="searchErrCode()">코드 검색</button>
       </div>
-      <span class="mode-label" id="mode-desc">검색 + 출처 표시</span>
+      <div class="err-chips">
+        <button class="err-chip" onclick="searchErrCode('E12')">E12</button>
+        <button class="err-chip" onclick="searchErrCode('E15')">E15</button>
+        <button class="err-chip" onclick="searchErrCode('E21')">E21</button>
+        <button class="err-chip" onclick="searchErrCode('E33')">E33</button>
+      </div>
     </div>
-    <textarea id="question" placeholder="예) 폐색 알람이 울리면 어떻게 해야 하나요?"></textarea>
-    <!-- 빠른 질문 칩 -->
-    <div class="chips">
-      <button class="chip" onclick="setQ('폐색 알람(AL-OCC)이 발생했을 때 조치 방법은?')">폐색 알람 조치</button>
-      <button class="chip" onclick="setQ('공기 알람(AL-AIR) 발생 시 어떻게 처리하나요?')">공기 알람 처리</button>
-      <button class="chip" onclick="setQ('E15 오류 코드의 의미와 대처법을 알려줘.')">E15 오류 대처</button>
-      <button class="chip" onclick="setQ('배터리 교체 기준이 어떻게 되나요?')">배터리 교체 기준</button>
-      <button class="chip" onclick="setQ('소독 및 세척 절차를 알려줘.')">세척·소독 절차</button>
-      <button class="chip" onclick="setQ('정기 점검 항목을 알려줘.')">정기 점검 항목</button>
-    </div>
-    <button id="send-btn" style="margin-top:14px;" onclick="sendQuestion()">질문하기</button>
-  </div>
 
-  <!-- 리콜 대조 -->
-  <div class="card">
-    <div class="card-label">리콜 대조</div>
-    <div class="recall-grid">
-      <div>
-        <label>보유 기기 목록 (JSON)</label>
-        <textarea id="recall-inventory">[
+    <!-- 참고 자료 (관리자 전용) -->
+    <div class="card admin-only">
+      <div class="context-header">
+        <div class="card-label">참고 자료 (매뉴얼 발췌) — 관리자</div>
+        <button id="reset-ctx" onclick="resetContext()">기본값 복원</button>
+      </div>
+      <textarea id="context"></textarea>
+    </div>
+
+    <!-- 질문 -->
+    <div class="card">
+      <!-- 바이브/하네스 토글 (관리자 전용) -->
+      <div class="mode-bar admin-only flex-display">
+        <span class="mode-label">응답 모드:</span>
+        <div class="toggle-wrap">
+          <button class="t-vibe" id="btn-vibe" onclick="setMode(true)">⚡ 바이브</button>
+          <button class="t-harn t-active" id="btn-harn" onclick="setMode(false)">🔍 하네스</button>
+        </div>
+        <span class="mode-label" id="mode-desc">검색 + 출처 표시</span>
+      </div>
+      <textarea id="question" placeholder="예) 폐색 알람이 울리면 어떻게 해야 하나요?"></textarea>
+      <div class="chips">
+        <button class="chip" onclick="setQ('폐색 알람(AL-OCC)이 발생했을 때 조치 방법은?')">폐색 알람 조치</button>
+        <button class="chip" onclick="setQ('공기 알람(AL-AIR) 발생 시 어떻게 처리하나요?')">공기 알람 처리</button>
+        <button class="chip" onclick="setQ('E15 오류 코드의 의미와 대처법을 알려줘.')">E15 오류 대처</button>
+        <button class="chip" onclick="setQ('배터리 교체 기준이 어떻게 되나요?')">배터리 교체 기준</button>
+        <button class="chip" onclick="setQ('소독 및 세척 절차를 알려줘.')">세척·소독 절차</button>
+        <button class="chip" onclick="setQ('정기 점검 항목을 알려줘.')">정기 점검 항목</button>
+      </div>
+      <button id="send-btn" style="margin-top:14px;" onclick="sendQuestion()">질문하기</button>
+    </div>
+
+    <!-- 답변 -->
+    <div class="card">
+      <div class="answer-header">
+        <div class="card-label">답변</div>
+        <button id="clear-btn" onclick="clearAnswer()">지우기</button>
+      </div>
+      <div id="answer-box" class="empty">답변이 여기에 표시됩니다.</div>
+      <div id="sources-box"></div>
+    </div>
+
+  </div><!-- /panel-failure -->
+
+  <!-- ══ 리콜 확인 패널 ══ -->
+  <div id="panel-recall" class="tab-panel">
+
+    <!-- 비관리자: 접근 제한 안내 -->
+    <div id="recall-locked" class="card locked-notice">
+      🔒 리콜 확인 기능은 <strong>관리자 전용</strong>입니다.<br>
+      관리자 비밀번호를 입력하면 이용할 수 있습니다.
+      <br>
+      <button onclick="openAdminModal()">관리자 로그인</button>
+    </div>
+
+    <!-- 관리자: 리콜 대조 -->
+    <div id="recall-content" class="card admin-only">
+      <div class="card-label">리콜 대조</div>
+      <div class="recall-grid">
+        <div>
+          <label>보유 기기 목록 (JSON)</label>
+          <textarea id="recall-inventory">[
   {"model":"DI-2200P","lot":"L2401"},
   {"model":"DI-2200P","lot":"L2402"}
 ]</textarea>
-      </div>
-      <div>
-        <label>리콜 공지 목록 (JSON)</label>
-        <textarea id="recall-notice">[
+        </div>
+        <div>
+          <label>리콜 공지 목록 (JSON)</label>
+          <textarea id="recall-notice">[
   {"model":"DI-2200P","lot":"L2401","reason":"압력센서 결함"}
 ]</textarea>
+        </div>
       </div>
+      <button id="recall-btn" onclick="runRecallCheck()">리콜 대조 실행</button>
+      <div id="source-chip" style="display:none;" class="source-chip">근거: /api/recall-check 코드 계산값</div>
     </div>
-    <button id="recall-btn" onclick="runRecallCheck()">리콜 대조 실행</button>
-  </div>
 
-  <!-- 답변 -->
-  <div class="card">
-    <div class="answer-header">
-      <div class="card-label">답변</div>
-      <button id="clear-btn" onclick="clearAnswer()">지우기</button>
-    </div>
-    <div id="answer-box" class="empty">답변이 여기에 표시됩니다.</div>
-    <div id="sources-box"></div>
-    <div id="source-chip" style="display:none;" class="source-chip">근거: /api/recall-check 코드 계산값</div>
-  </div>
+  </div><!-- /panel-recall -->
 
 </main>
 
-<script>
-  // ── 주소 설정 (이 변수 하나만 수정하면 됨) ──────────────────────────
-  const BE = "http://127.0.0.1:8000";
-  // ────────────────────────────────────────────────────────────────────
+<!-- ── 관리자 로그인 모달 ── -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>🔑 관리자 로그인</h2>
+    <p>관리자 비밀번호를 입력하면 참고 자료 편집, 바이브 모드, 리콜 확인 기능을 사용할 수 있습니다.</p>
+    <input id="modal-pw" type="password" placeholder="비밀번호 입력"
+           onkeydown="if(event.key==='Enter') confirmAdmin()" />
+    <div id="modal-err"></div>
+    <div class="modal-btns">
+      <button id="modal-cancel" onclick="closeAdminModal()">취소</button>
+      <button id="modal-confirm" onclick="confirmAdmin()">로그인</button>
+    </div>
+  </div>
+</div>
 
+<script>
+  // ── 설정 ─────────────────────────────────────────────────────────────
+  const BE         = "http://127.0.0.1:8000";
+  const ADMIN_PASS = "admin1234";   // ← 비밀번호 변경 시 여기만 수정
+
+  // ── 상태 ─────────────────────────────────────────────────────────────
+  let isAdmin  = false;
+  let bareMode = false;   // false = 하네스(기본/사용자), true = 바이브(관리자만)
+  let activeTab = "failure";
+
+  // ── 기본 참고 자료 ───────────────────────────────────────────────────
   const DEFAULT_CONTEXT = `[DI-2200P 주입펌프 수리 매뉴얼 발췌 — 샘플]
 
 1) 폐색 알람(Occlusion / 알람코드 AL-OCC) — p.42
@@ -449,52 +514,135 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
 본 매뉴얼의 점검·조치는 자격 갖춘 기술자 전용. 임의 분해·내부 회로 수리·부품 개조 금지. 의심 시 제조사 서비스 요청.
 환자 연결 상태에서의 점검은 금지(반드시 라인 분리 후).`;
 
+  document.getElementById("context").value = DEFAULT_CONTEXT;
+
+  // ── DOM 참조 ─────────────────────────────────────────────────────────
   const dot        = document.getElementById("dot");
   const statusText = document.getElementById("status-text");
   const sendBtn    = document.getElementById("send-btn");
   const answerBox  = document.getElementById("answer-box");
-  const ctxArea    = document.getElementById("context");
 
-  // 참고 자료 기본값 채우기
-  ctxArea.value = DEFAULT_CONTEXT;
-
-  function resetContext() {
-    ctxArea.value = DEFAULT_CONTEXT;
-  }
-
-  function setQ(text) {
-    document.getElementById("question").value = text;
-    document.getElementById("question").focus();
-  }
-
-  // 시작 시 헬스 체크
+  // ── 헬스 체크 ────────────────────────────────────────────────────────
   async function checkHealth() {
     try {
       const res = await fetch(BE + "/health");
-      if (res.ok) {
-        dot.className = "ok";
-        statusText.textContent = "백엔드 연결됨";
-      } else throw new Error();
+      if (res.ok) { dot.className = "ok"; statusText.textContent = "백엔드 연결됨"; }
+      else throw new Error();
     } catch {
-      dot.className = "err";
-      statusText.textContent = "백엔드 연결 실패";
+      dot.className = "err"; statusText.textContent = "백엔드 연결 실패";
     }
   }
   checkHealth();
 
+  // ── 탭 전환 ──────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("tab-active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("panel-active"));
+    document.getElementById("tab-"    + tab).classList.add("tab-active");
+    document.getElementById("panel-" + tab).classList.add("panel-active");
+  }
+
+  // ── 관리자 권한 적용 ─────────────────────────────────────────────────
+  function applyAdminMode(admin) {
+    isAdmin = admin;
+    document.body.classList.toggle("admin-mode", admin);
+    document.getElementById("admin-badge").classList.toggle("visible", admin);
+    document.getElementById("btn-admin-login").textContent = admin ? "로그아웃" : "관리자 로그인";
+    document.getElementById("btn-admin-login").onclick     = admin ? doLogout : openAdminModal;
+
+    // 리콜 탭 잠금 표시
+    const recallTab = document.getElementById("tab-recall");
+    recallTab.classList.toggle("tab-locked", !admin);
+
+    // 리콜 패널 내 잠금 안내 / 콘텐츠 가시성
+    document.getElementById("recall-locked").style.display  = admin ? "none"  : "block";
+
+    // 관리자 로그아웃 시 리콜 탭에 있으면 고장 대응으로 이동
+    if (!admin && activeTab === "recall") switchTab("failure");
+
+    // 사용자 모드에서 하네스 강제
+    if (!admin) {
+      bareMode = false;
+      document.getElementById("btn-harn").classList.add("t-active");
+      document.getElementById("btn-vibe").classList.remove("t-active");
+      document.getElementById("mode-desc").textContent = "검색 + 출처 표시";
+    }
+  }
+
+  function doLogout() {
+    applyAdminMode(false);
+    if (activeTab === "recall") switchTab("failure");
+  }
+
+  // ── 관리자 모달 ──────────────────────────────────────────────────────
+  function openAdminModal() {
+    document.getElementById("modal-pw").value  = "";
+    document.getElementById("modal-err").textContent = "";
+    document.getElementById("modal-overlay").classList.add("open");
+    setTimeout(() => document.getElementById("modal-pw").focus(), 80);
+  }
+  function closeAdminModal() {
+    document.getElementById("modal-overlay").classList.remove("open");
+  }
+  function confirmAdmin() {
+    const pw = document.getElementById("modal-pw").value;
+    if (pw === ADMIN_PASS) {
+      closeAdminModal();
+      applyAdminMode(true);
+    } else {
+      document.getElementById("modal-err").textContent = "비밀번호가 올바르지 않습니다.";
+      document.getElementById("modal-pw").value = "";
+      document.getElementById("modal-pw").focus();
+    }
+  }
+  // 오버레이 클릭으로 닫기
+  document.getElementById("modal-overlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("modal-overlay")) closeAdminModal();
+  });
+
+  // ── 유틸 ─────────────────────────────────────────────────────────────
+  function resetContext() { document.getElementById("context").value = DEFAULT_CONTEXT; }
+  function setQ(text) {
+    document.getElementById("question").value = text;
+    document.getElementById("question").focus();
+  }
   function clearAnswer() {
     answerBox.textContent = "답변이 여기에 표시됩니다.";
     answerBox.className = "empty";
+    document.getElementById("sources-box").style.display = "none";
+    document.getElementById("sources-box").innerHTML = "";
   }
 
+  // ── 바이브/하네스 토글 (관리자만 호출 가능) ──────────────────────────
+  function setMode(vibe) {
+    if (!isAdmin) return;   // 사용자 모드에서는 무시
+    bareMode = vibe;
+    document.getElementById("btn-vibe").classList.toggle("t-active",  vibe);
+    document.getElementById("btn-harn").classList.toggle("t-active", !vibe);
+    document.getElementById("mode-desc").textContent = vibe ? "모델 직접 호출 (출처 없음)" : "검색 + 출처 표시";
+  }
+
+  // ── 오류 코드 빠른 검색 ──────────────────────────────────────────────
+  function searchErrCode(code) {
+    const raw = (code ?? document.getElementById("err-code-input").value).trim().toUpperCase();
+    if (!raw) { alert("오류 코드를 입력하거나 칩을 선택하세요."); return; }
+    // 항상 하네스 모드 (사용자/관리자 모두)
+    if (bareMode) setMode(false);
+    document.getElementById("question").value =
+      `오류 코드 ${raw}의 의미와 조치를 매뉴얼 근거로 알려줘.`;
+    document.getElementById("err-code-input").value = raw;
+    sendQuestion();
+  }
+
+  // ── 질문 전송 ────────────────────────────────────────────────────────
   async function sendQuestion() {
     const question = document.getElementById("question").value.trim();
-    const context  = ctxArea.value.trim();
+    const context  = document.getElementById("context").value.trim();
+    if (!question) { alert("질문을 입력해 주세요."); return; }
 
-    if (!question) {
-      alert("질문을 입력해 주세요.");
-      return;
-    }
+    // 사용자 모드는 항상 하네스
+    const useBare = isAdmin ? bareMode : false;
 
     const sourcesBox = document.getElementById("sources-box");
     sendBtn.disabled = true;
@@ -509,9 +657,8 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
       const res = await fetch(BE + "/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, context, bare: bareMode }),
+        body: JSON.stringify({ question, context, bare: useBare }),
       });
-
       if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
 
       const reader  = res.body.getReader();
@@ -521,7 +668,6 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop();
@@ -529,36 +675,31 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
         for (const line of lines) {
           if (!line.startsWith("data:")) continue;
           const raw = line.slice(5).trim();
-          if (raw === "[DONE]") break;
-          if (raw === "[DONE]") continue;   // [DONE] 이후 같은 청크에 sources 있을 수 있으므로 continue
+          if (raw === "[DONE]") continue;
           try {
             const parsed = JSON.parse(raw);
             if (parsed.sources) {
-              // 토큰 스트림 끝에 오는 출처 이벤트
               const chips = parsed.sources.map(s =>
                 `<span class="src-chip">${s.title}${s.page ? ' <em>(' + s.page + ')</em>' : ''}</span>`
               ).join(" ");
               sourcesBox.innerHTML = `<strong>📎 근거</strong>&nbsp; ${chips}`;
               sourcesBox.style.display = "block";
             } else {
-              const token = parsed.token ?? "";
-              accumulated += token;
+              accumulated += parsed.token ?? "";
               answerBox.innerHTML =
                 accumulated.replace(/</g, "&lt;").replace(/>/g, "&gt;")
                 + '<span class="cursor"></span>';
             }
-          } catch { /* 파싱 실패 무시 */ }
+          } catch { /* 무시 */ }
         }
       }
 
       answerBox.textContent = accumulated || "응답 없음";
       answerBox.className = "";
-
     } catch (err) {
       answerBox.textContent = "오류: " + err.message;
       answerBox.className = "err-state";
-      dot.className = "err";
-      statusText.textContent = "요청 실패";
+      dot.className = "err"; statusText.textContent = "요청 실패";
     } finally {
       sendBtn.disabled = false;
     }
@@ -568,38 +709,15 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendQuestion();
   });
 
-  // ── 바이브 ↔ 하네스 토글 ──────────────────────────────────────────
-  let bareMode = false;   // false = 하네스(기본), true = 바이브
-
-  function setMode(vibe) {
-    bareMode = vibe;
-    document.getElementById("btn-vibe").classList.toggle("t-active",  vibe);
-    document.getElementById("btn-harn").classList.toggle("t-active", !vibe);
-    document.getElementById("mode-desc").textContent =
-      vibe ? "모델 직접 호출 (출처 없음)" : "검색 + 출처 표시";
-  }
-
-  // ── 오류 코드 빠른 검색 ───────────────────────────────────────────
-  function searchErrCode(code) {
-    const raw = (code ?? document.getElementById("err-code-input").value).trim().toUpperCase();
-    if (!raw) { alert("오류 코드를 입력하거나 칩을 선택하세요."); return; }
-    // 하네스 모드 강제
-    if (bareMode) setMode(false);
-    document.getElementById("question").value =
-      `오류 코드 ${raw}의 의미와 조치를 매뉴얼 근거로 알려줘.`;
-    document.getElementById("err-code-input").value = raw;
-    sendQuestion();
-  }
-
-  // ── 리콜 대조 ─────────────────────────────────────────────────────
+  // ── 리콜 대조 ────────────────────────────────────────────────────────
   async function runRecallCheck() {
+    if (!isAdmin) { openAdminModal(); return; }
     let inventory, recallNotice;
     try {
       inventory    = JSON.parse(document.getElementById("recall-inventory").value);
       recallNotice = JSON.parse(document.getElementById("recall-notice").value);
     } catch {
-      alert("JSON 형식이 올바르지 않습니다. 입력값을 확인해 주세요.");
-      return;
+      alert("JSON 형식이 올바르지 않습니다. 입력값을 확인해 주세요."); return;
     }
 
     const recallBtn  = document.getElementById("recall-btn");
@@ -609,6 +727,8 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
     sourceChip.style.display = "none";
     answerBox.className = "streaming";
     answerBox.innerHTML = '<span class="cursor"></span>';
+    // 답변 박스를 보이게 고장 대응 탭으로 이동
+    switchTab("failure");
 
     let accumulated = "";
 
@@ -618,7 +738,6 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inventory, recall_notice: recallNotice }),
       });
-
       if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
 
       const reader  = res.body.getReader();
@@ -629,7 +748,6 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop();
@@ -637,26 +755,23 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
         for (const line of lines) {
           if (!line.startsWith("data:")) continue;
           const raw = line.slice(5).trim();
-          if (raw === "[DONE]") break;
+          if (raw === "[DONE]") continue;
           try {
             const parsed = JSON.parse(raw);
             if (parsed.type === "meta") {
-              // 파이썬 계산값 — 모델이 아닌 코드가 낸 확정값
               metaInfo = parsed;
             } else {
-              const token = parsed.token || "";
-              accumulated += token;
+              accumulated += parsed.token || "";
               answerBox.innerHTML =
                 accumulated.replace(/</g, "&lt;").replace(/>/g, "&gt;")
                 + '<span class="cursor"></span>';
             }
-          } catch { /* 파싱 실패 무시 */ }
+          } catch { /* 무시 */ }
         }
       }
 
       answerBox.textContent = accumulated || "응답 없음";
       answerBox.className = "";
-      // 출처 칩: 계산 요약도 함께 표시
       if (metaInfo) {
         sourceChip.textContent =
           `근거: /api/recall-check 코드 계산값 — ` +
@@ -664,12 +779,10 @@ E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.
           `대상 아님 ${metaInfo.safe}건(${metaInfo.safe_lots.join(", ") || "없음"})`;
       }
       sourceChip.style.display = "inline-block";
-
     } catch (err) {
       answerBox.textContent = "오류: " + err.message;
       answerBox.className = "err-state";
-      dot.className = "err";
-      statusText.textContent = "요청 실패";
+      dot.className = "err"; statusText.textContent = "요청 실패";
     } finally {
       recallBtn.disabled = false;
     }
