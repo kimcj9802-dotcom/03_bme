@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -83,10 +83,34 @@ DOCS = [
 _doc_embeddings: np.ndarray | None = None   # shape (N, D)
 
 # ── 업로드로 추가된 동적 조각 ─────────────────────────────────────────
-_user_docs: list[str] = []   # POST /api/upload-pdf 로 채워짐
+# key = "장비명|모델명"  (빈 값이면 "default")
+_user_docs: dict[str, list[str]] = {}
 
 def _get_all_docs() -> list[str]:
-    return DOCS + _user_docs
+    """내장 DOCS + 모든 업로드 조각을 펼쳐 반환."""
+    result = list(DOCS)
+    for chunks in _user_docs.values():
+        result.extend(chunks)
+    return result
+
+def _device_key(device_name: str, model_name: str) -> str:
+    return f"{device_name.strip()}|{model_name.strip()}"
+
+def _get_candidate_indices(device_name: str, model_name: str) -> list[int]:
+    """지정 장비/모델의 업로드 조각 + 내장 DOCS 인덱스 반환.
+    장비 미지정이면 전체 인덱스."""
+    all_docs = _get_all_docs()
+    key = _device_key(device_name, model_name)
+    if not key.strip("|") or not _user_docs:
+        return list(range(len(all_docs)))
+    # 내장 DOCS는 항상 포함
+    indices = list(range(len(DOCS)))
+    offset = len(DOCS)
+    for k, chunks in _user_docs.items():
+        if k == key:
+            indices.extend(range(offset, offset + len(chunks)))
+        offset += len(chunks)
+    return indices
 
 # ── PDF 문제 해결 섹션 키워드 패턴 ────────────────────────────────────
 TROUBLESHOOT_RE = re.compile(
@@ -101,20 +125,34 @@ TROUBLESHOOT_RE = re.compile(
 )
 
 
-SYSTEM_PROMPT = (
-    "아래 근거 자료에 질문의 답이 실제로 있으면 출처와 함께 답하고, "
-    "자료에 답이 없으면 추측하지 말고 '자료에서 확인되지 않습니다'라고만 답하라.\n"
-    "너는 의료기기 수리 매뉴얼 안내 도우미다. "
-    "반드시 아래 '참고 자료(매뉴얼 발췌)'에 명시된 내용만 근거로 답한다. "
-    "자료에 없는 모델명·증상·알람 코드·오류 코드·절차는 예외 없이 '자료에서 확인되지 않습니다'라고만 답한다. "
-    "알람 코드 또는 오류 코드가 자료 목록에 없으면 '미수록 코드 — 해당 코드는 제공된 발췌에 수록되어 있지 않습니다.'라고 명시한다.\n"
-    "자료에 있는 내용을 답할 때: 증상을 물으면 '증상 → 점검 → 조치' 순서로 정리한다. "
-    "답변 끝에 '근거: <항목명> (p.OO)' 형식으로 출처를 표기하고, 근거가 여러 개면 쉼표로 나열한다.\n"
-    "임의 분해·직접 수리·내부 회로 수리를 묻는 경우 절차를 알려주지 않고 "
-    "'해당 작업은 자격 기술자 또는 제조사 서비스 대상입니다. 임의 분해·수리는 금지되어 있습니다.'라고만 답한다.\n"
-    "모든 답변의 맨 마지막에 반드시 다음 안전 고지를 한 번 덧붙인다: "
-    "'⚠️자격 기술자 전용 — 임의 분해·내부 수리 금지, 환자 연결 상태 점검 금지, 의심 시 제조사 서비스 요청.'"
-)
+def build_system_prompt(device_name: str = "", model_name: str = "") -> str:
+    """하네스 모드 시스템 프롬프트. 장비/모델 지정 시 해당 장비 한정 문구 포함."""
+    device_clause = ""
+    if device_name or model_name:
+        parts = []
+        if device_name: parts.append(f"장비명 '{device_name}'")
+        if model_name:  parts.append(f"모델명 '{model_name}'")
+        device_clause = (
+            f"이 질문은 {', '.join(parts)}에 관한 것이다. "
+            f"근거 자료가 해당 장비·모델에 대한 내용인지 반드시 확인하고, "
+            f"다른 장비·모델의 자료를 이 장비에 적용하지 말라. "
+            f"자료에 해당 장비·모델 정보가 없으면 '자료에서 확인되지 않습니다'라고만 답하라.\n"
+        )
+    return (
+        "아래 근거 자료에 질문의 답이 실제로 있으면 출처와 함께 답하고, "
+        "자료에 답이 없으면 추측하지 말고 '자료에서 확인되지 않습니다'라고만 답하라.\n"
+        + device_clause +
+        "너는 의료기기 수리 매뉴얼 안내 도우미다. "
+        "반드시 아래 '참고 자료(매뉴얼 발췌)'에 명시된 내용만 근거로 답한다. "
+        "자료에 없는 모델명·증상·알람 코드·오류 코드·절차는 예외 없이 '자료에서 확인되지 않습니다'라고만 답한다. "
+        "알람 코드 또는 오류 코드가 자료 목록에 없으면 '미수록 코드 — 해당 코드는 제공된 발췌에 수록되어 있지 않습니다.'라고 명시한다.\n"
+        "자료에 있는 내용을 답할 때: 증상을 물으면 '증상 → 점검 → 조치' 순서로 정리한다. "
+        "답변 끝에 '근거: <항목명> (p.OO)' 형식으로 출처를 표기하고, 근거가 여러 개면 쉼표로 나열한다.\n"
+        "임의 분해·직접 수리·내부 회로 수리를 묻는 경우 절차를 알려주지 않고 "
+        "'해당 작업은 자격 기술자 또는 제조사 서비스 대상입니다. 임의 분해·수리는 금지되어 있습니다.'라고만 답한다.\n"
+        "모든 답변의 맨 마지막에 반드시 다음 안전 고지를 한 번 덧붙인다: "
+        "'⚠️자격 기술자 전용 — 임의 분해·내부 수리 금지, 환자 연결 상태 점검 금지, 의심 시 제조사 서비스 요청.'"
+    )
 
 VIBE_SYSTEM_PROMPT = (
     "너는 의료기기 수리 전문 도우미다. "
@@ -167,17 +205,26 @@ def _parse_source(first_line: str) -> dict:
     return {"title": first_line.strip(), "page": ""}
 
 
-async def retrieve(question: str, top_k: int = TOP_K) -> tuple[list[str], list[dict]]:
-    """코사인 유사도 상위 top_k 조각을 반환.
-    SIM_THRESHOLD 미만 조각은 제외하되, 최상위 1개는 임계값 무관하게 항상 포함.
-    반환: (chunks, sources) — sources = [{"title": ..., "page": ...}, ...]
+async def retrieve(
+    question: str,
+    device_name: str = "",
+    model_name: str = "",
+    top_k: int = TOP_K,
+) -> tuple[list[str], list[dict]]:
+    """장비/모델 필터 + 코사인 유사도 상위 top_k 조각 반환.
+    SIM_THRESHOLD 미만 조각은 제외하되 최상위 1개는 항상 포함.
+    장비명/모델명을 쿼리에 포함해 RAG 정확도 향상.
     """
-    all_docs = _get_all_docs()
-    doc_vecs = await ensure_doc_embeddings()
-    q_vec    = await embed(question)
-    sims     = [cosine_sim(q_vec, dv) for dv in doc_vecs]
+    all_docs    = _get_all_docs()
+    doc_vecs    = await ensure_doc_embeddings()
+    candidates  = _get_candidate_indices(device_name, model_name)
 
-    ranked = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)
+    # 장비명·모델명을 쿼리에 합쳐 임베딩 → 관련 조각이 상위에 올라옴
+    search_q = " ".join(filter(None, [device_name, model_name, question]))
+    q_vec    = await embed(search_q)
+
+    sims   = {i: cosine_sim(q_vec, doc_vecs[i]) for i in candidates}
+    ranked = sorted(candidates, key=lambda i: sims[i], reverse=True)
 
     selected = []
     for rank, idx in enumerate(ranked):
@@ -196,8 +243,10 @@ async def retrieve(question: str, top_k: int = TOP_K) -> tuple[list[str], list[d
 # ── Pydantic 모델 ─────────────────────────────────────────────────────
 class ChatRequest(BaseModel):
     question: str
-    context: str = ""  # 하네스 모드에서는 RAG가 대체; 바이브 모드에서도 무시
-    bare: bool = False  # True = 바이브(모델 직접), False = 하네스(RAG + 출처)
+    context: str = ""       # 프론트 전달값 — RAG가 대체하므로 백엔드에서 무시
+    bare: bool = False      # True = 바이브, False = 하네스
+    device_name: str = ""   # 장비명 (예: 주입펌프)
+    model_name:  str = ""   # 모델명 (예: DI-2200P)
 
 
 class DeviceItem(BaseModel):
@@ -217,13 +266,13 @@ class RecallCheckRequest(BaseModel):
 
 
 # ── 스트리밍 헬퍼 ─────────────────────────────────────────────────────
-async def stream_ollama(question: str, context: str):
+async def stream_ollama(question: str, context: str, system_prompt: str):
     """토큰만 흘림 — [DONE] 은 호출부에서 발행 (sources 이벤트 순서 제어 목적)."""
     payload = {
         "model": MODEL,
         "stream": True,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"참고 자료:\n{context}\n\n질문: {question}"},
         ],
     }
@@ -273,9 +322,12 @@ async def stream_recall(context: str):
 async def chat(req: ChatRequest):
     async def sse_harness():
         # 토큰 → sources 이벤트 → [DONE]  (이 순서를 지켜야 프론트가 sources를 읽음)
-        chunks, sources = await retrieve(req.question, top_k=TOP_K)
-        context = "\n\n".join(chunks)
-        async for chunk in stream_ollama(req.question, context):
+        chunks, sources = await retrieve(
+            req.question, req.device_name, req.model_name, top_k=TOP_K
+        )
+        context     = "\n\n".join(chunks)
+        sys_prompt  = build_system_prompt(req.device_name, req.model_name)
+        async for chunk in stream_ollama(req.question, context, sys_prompt):
             yield chunk
         yield f"data: {json.dumps({'sources': sources}, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"
@@ -394,15 +446,24 @@ def _extract_pdf_pages(pdf_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
     return pages, ocr_used
 
 
-def _filter_troubleshoot_chunks(pages: list[tuple[int, str]]) -> list[str]:
-    """문제 해결·오류 코드 관련 페이지만 조각으로 추출."""
+def _filter_troubleshoot_chunks(
+    pages: list[tuple[int, str]],
+    device_name: str = "",
+    model_name: str = "",
+) -> list[str]:
+    """문제 해결·오류 코드 관련 페이지만 조각으로 추출. 장비/모델 태그 포함."""
+    tag_parts = []
+    if device_name: tag_parts.append(f"장비: {device_name}")
+    if model_name:  tag_parts.append(f"모델: {model_name}")
+    tag = " / ".join(tag_parts)
+
     chunks = []
     for page_num, text in pages:
         if not TROUBLESHOOT_RE.search(text):
             continue
-        # 페이지가 길면 단락 기준으로 분할 (600자 이내)
+        prefix = f"[{tag} — p.{page_num}]" if tag else f"[업로드 자료 p.{page_num}]"
         if len(text) <= 800:
-            chunks.append(f"[업로드 자료 p.{page_num}]\n{text}")
+            chunks.append(f"{prefix}\n{text}")
             continue
         paragraphs = re.split(r"\n{2,}", text)
         bucket: list[str] = []
@@ -411,17 +472,21 @@ def _filter_troubleshoot_chunks(pages: list[tuple[int, str]]) -> list[str]:
             if len("\n\n".join(bucket)) > 600:
                 chunk_text = "\n\n".join(bucket).strip()
                 if chunk_text:
-                    chunks.append(f"[업로드 자료 p.{page_num}]\n{chunk_text}")
+                    chunks.append(f"{prefix}\n{chunk_text}")
                 bucket = []
         if bucket:
             chunk_text = "\n\n".join(bucket).strip()
             if chunk_text:
-                chunks.append(f"[업로드 자료 p.{page_num}]\n{chunk_text}")
+                chunks.append(f"{prefix}\n{chunk_text}")
     return chunks
 
 
 @app.post("/api/upload-pdf")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(
+    file: UploadFile = File(...),
+    device_name: str = Form(""),
+    model_name:  str = Form(""),
+):
     global _user_docs, _doc_embeddings
     if not file.filename.lower().endswith(".pdf"):
         return {"ok": False, "error": "PDF 파일(.pdf)만 업로드 가능합니다."}
@@ -433,7 +498,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     except Exception as e:
         return {"ok": False, "error": f"PDF 파싱 오류: {e}"}
 
-    chunks = _filter_troubleshoot_chunks(pages)
+    chunks = _filter_troubleshoot_chunks(pages, device_name, model_name)
     if not chunks:
         return {
             "ok": False,
@@ -445,26 +510,38 @@ async def upload_pdf(file: UploadFile = File(...)):
             "ocr_used": ocr_used,
         }
 
-    _user_docs = chunks          # 기존 업로드 대체 (내장 DOCS 는 보존)
-    _doc_embeddings = None       # 캐시 무효화 → 다음 질문 시 재임베딩
+    key = _device_key(device_name, model_name) or "default"
+    _user_docs[key] = chunks    # 해당 장비/모델 업로드 대체 (다른 장비는 보존)
+    _doc_embeddings = None      # 캐시 무효화 → 다음 질문 시 재임베딩
 
     return {
         "ok": True,
         "filename": file.filename,
+        "device_name": device_name,
+        "model_name": model_name,
         "pages_processed": len(pages),
         "chunks_extracted": len(chunks),
         "ocr_used": ocr_used,
-        "preview": chunks[:3],   # 미리보기 앞 3개
+        "preview": chunks[:3],
     }
 
 
 @app.post("/api/reset-docs")
-async def reset_docs():
-    """업로드 자료를 초기화하고 내장 DOCS만 사용."""
+async def reset_docs(
+    device_name: str = Form(""),
+    model_name:  str = Form(""),
+):
+    """업로드 자료 초기화. 장비/모델 지정 시 해당 것만, 미지정 시 전체."""
     global _user_docs, _doc_embeddings
-    _user_docs = []
+    key = _device_key(device_name, model_name)
+    if key.strip("|"):
+        _user_docs.pop(key, None)
+        msg = f"'{device_name} {model_name}' 업로드 자료가 초기화되었습니다."
+    else:
+        _user_docs = {}
+        msg = "모든 업로드 자료가 초기화되었습니다. 내장 매뉴얼만 사용합니다."
     _doc_embeddings = None
-    return {"ok": True, "message": "업로드 자료가 초기화되었습니다. 내장 매뉴얼만 사용합니다."}
+    return {"ok": True, "message": msg}
 
 
 @app.get("/health")
