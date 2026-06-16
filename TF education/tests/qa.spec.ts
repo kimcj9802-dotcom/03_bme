@@ -4,6 +4,14 @@ const BACKEND  = 'http://127.0.0.1:8000';
 const FRONTEND = 'http://127.0.0.1:5500';         // python -m http.server 5500
 const QUESTION = '폐색 알람(AL-OCC)이 발생했을 때 조치 방법은?';
 
+// 관리자 로그인 헬퍼 (바이브 모드 토글은 admin-only)
+async function loginAdmin(page: import('@playwright/test').Page) {
+  await page.locator('#btn-admin-login').click();
+  await page.locator('#modal-pw').fill('admin1234');
+  await page.locator('#modal-confirm').click();
+  await expect(page.locator('#admin-badge')).toBeVisible({ timeout: 3_000 });
+}
+
 // ── 1. 백엔드 /health 연결 확인 ─────────────────────────────────────
 test('1) 백엔드 /health 연결 확인', async ({ request }) => {
   const res = await request.get(`${BACKEND}/health`);
@@ -136,6 +144,10 @@ test('E21 오류 코드 빠른 검색 — 도어·출처·안전 고지 검증',
 test('바이브 모드 — 출처 없이 답변 확인', async ({ page }) => {
   await page.goto(FRONTEND);
   await expect(page.locator('#dot')).toHaveClass(/\bok\b/, { timeout: 8_000 });
+
+  // 바이브 모드 토글은 admin-only → 먼저 관리자 로그인
+  await loginAdmin(page);
+  console.log('  ✅ 관리자 로그인 완료');
 
   // 바이브 모드로 전환
   await page.locator('#btn-vibe').click();
