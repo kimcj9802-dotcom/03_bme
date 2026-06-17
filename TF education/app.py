@@ -17,6 +17,11 @@ except ImportError:
 try:
     import pytesseract   # OCR (선택 — 없어도 동작)
     from PIL import Image
+    # Windows 기본 설치 경로 자동 설정
+    import os as _os
+    _tess_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    if _os.path.exists(_tess_path):
+        pytesseract.pytesseract.tesseract_cmd = _tess_path
     _OCR_OK = True
 except ImportError:
     _OCR_OK = False
