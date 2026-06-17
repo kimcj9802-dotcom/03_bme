@@ -87,9 +87,27 @@ DOCS = [
 # ── 임베딩 캐시 (앱 수명 동안 유지) ──────────────────────────────────
 _doc_embeddings: np.ndarray | None = None   # shape (N, D)
 
-# ── 업로드로 추가된 동적 조각 ─────────────────────────────────────────
+# ── 업로드로 추가된 동적 조각 (디스크 영구 저장) ─────────────────────
 # key = "장비명|모델명"  (빈 값이면 "default")
-_user_docs: dict[str, list[str]] = {}
+import pathlib as _pathlib
+_DATA_DIR  = _pathlib.Path(__file__).parent / "data"
+_DOCS_FILE = _DATA_DIR / "user_docs.json"
+_DATA_DIR.mkdir(exist_ok=True)
+
+def _load_user_docs() -> dict[str, list[str]]:
+    if _DOCS_FILE.exists():
+        try:
+            return json.loads(_DOCS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+def _save_user_docs() -> None:
+    _DOCS_FILE.write_text(
+        json.dumps(_user_docs, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+_user_docs: dict[str, list[str]] = _load_user_docs()
 
 def _get_all_docs() -> list[str]:
     """내장 DOCS + 모든 업로드 조각을 펼쳐 반환."""
@@ -518,6 +536,7 @@ async def upload_pdf(
     key = _device_key(device_name, model_name) or "default"
     _user_docs[key] = chunks    # 해당 장비/모델 업로드 대체 (다른 장비는 보존)
     _doc_embeddings = None      # 캐시 무효화 → 다음 질문 시 재임베딩
+    _save_user_docs()           # 디스크에 영구 저장
 
     return {
         "ok": True,
@@ -543,9 +562,10 @@ async def reset_docs(
         _user_docs.pop(key, None)
         msg = f"'{device_name} {model_name}' 업로드 자료가 초기화되었습니다."
     else:
-        _user_docs = {}
+        _user_docs.clear()
         msg = "모든 업로드 자료가 초기화되었습니다. 내장 매뉴얼만 사용합니다."
     _doc_embeddings = None
+    _save_user_docs()           # 디스크에 반영
     return {"ok": True, "message": msg}
 
 
@@ -553,6 +573,39 @@ async def reset_docs(
 async def health():
     # 캐시 상태도 함께 반환
     return {"status": "ok", "docs_cached": _doc_embeddings is not None}
+
+
+@app.get("/api/debug-docs")
+async def debug_docs():
+    """업로드된 문서 키·조각 수·첫 200자 미리보기 반환 (디버그용)."""
+    return {
+        "user_doc_keys": list(_user_docs.keys()),
+        "user_doc_chunk_counts": {k: len(v) for k, v in _user_docs.items()},
+        "previews": {
+            k: [c[:200] for c in v[:3]]
+            for k, v in _user_docs.items()
+        },
+    }
+
+
+@app.post("/api/debug-retrieve")
+async def debug_retrieve(req: ChatRequest):
+    """질문에 대해 실제로 선택된 청크와 유사도를 반환 (디버그용)."""
+    all_docs   = _get_all_docs()
+    doc_vecs   = await ensure_doc_embeddings()
+    candidates = _get_candidate_indices(req.device_name, req.model_name)
+    search_q   = " ".join(filter(None, [req.device_name, req.model_name, req.question]))
+    q_vec      = await embed(search_q)
+    sims       = {i: float(cosine_sim(q_vec, doc_vecs[i])) for i in candidates}
+    ranked     = sorted(candidates, key=lambda i: sims[i], reverse=True)[:TOP_K * 2]
+    return {
+        "search_query": search_q,
+        "candidates_total": len(candidates),
+        "top_results": [
+            {"index": i, "sim": round(sims[i], 4), "preview": all_docs[i][:200]}
+            for i in ranked
+        ],
+    }
 
 
 if __name__ == "__main__":
