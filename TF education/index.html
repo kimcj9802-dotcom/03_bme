@@ -116,16 +116,40 @@
   .err-chip:hover { background: #b03a2e; color: #fff; }
 
   /* ── 리콜 ── */
-  .recall-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 600px) { .recall-grid { grid-template-columns: 1fr; } }
-  .recall-grid label { font-size: .75rem; font-weight: 600; color: #555; display: block; margin-bottom: 4px; }
-  .recall-grid textarea { min-height: 120px; font-size: .8rem; }
-  #recall-btn { margin-top: 12px; background: #1a6b3a; }
-  #recall-btn:hover:not(:disabled) { background: #145730; }
   .source-chip { display: inline-block; margin-top: 8px; font-size: .75rem; padding: 3px 10px; border: 1px solid #1a6b3a; border-radius: 12px; color: #1a6b3a; background: #edf7f1; }
   .locked-notice { text-align: center; padding: 40px 20px; color: #888; font-size: .9rem; line-height: 2; }
   .locked-notice button { display: inline-block; width: auto; padding: 8px 20px; font-size: .88rem; margin-top: 12px; background: #e8a020; }
   .locked-notice button:hover { background: #c88010; }
+
+  /* 리콜 분석 패널 */
+  .recall-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
+  @media (max-width: 600px) { .recall-summary-grid { grid-template-columns: repeat(2,1fr); } }
+  .recall-stat { background: #f5f7fa; border-radius: 10px; padding: 14px 10px; text-align: center; }
+  .recall-stat .num  { font-size: 1.6rem; font-weight: 800; color: #1a3a6b; }
+  .recall-stat .num.danger { color: #c0392b; }
+  .recall-stat .num.warn   { color: #e08000; }
+  .recall-stat .lbl  { font-size: .72rem; color: #777; margin-top: 3px; }
+  .recall-tab-bar { display: flex; gap: 8px; margin: 14px 0 8px; }
+  .recall-tab { padding: 6px 18px; border-radius: 20px; border: 2px solid #ccc; background: #fff; font-size: .82rem; font-weight: 700; cursor: pointer; }
+  .recall-tab.active-high   { border-color: #c0392b; background: #c0392b; color: #fff; }
+  .recall-tab.active-review { border-color: #e08000; background: #e08000; color: #fff; }
+  .recall-table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+  .recall-table { width: 100%; border-collapse: collapse; font-size: .78rem; min-width: 900px; }
+  .recall-table th { position: sticky; top: 0; background: #1a3a6b; color: #fff; padding: 8px 10px; text-align: left; white-space: nowrap; }
+  .recall-table td { padding: 7px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .recall-table tr:hover td { background: #f0f4ff; }
+  .badge-high   { display:inline-block; background:#c0392b; color:#fff; padding:2px 8px; border-radius:10px; font-size:.7rem; font-weight:700; }
+  .badge-review { display:inline-block; background:#e08000; color:#fff; padding:2px 8px; border-radius:10px; font-size:.7rem; font-weight:700; }
+  .score-bar { display:inline-block; width:50px; height:7px; border-radius:4px; background:#eee; vertical-align:middle; margin-right:4px; overflow:hidden; }
+  .score-fill { height:100%; border-radius:4px; }
+  #recall-fetch-btn  { background: #1a3a6b; margin-bottom: 0; }
+  #recall-fetch-btn:hover:not(:disabled) { background: #122b52; }
+  #recall-match-btn  { background: #1a6b3a; margin-top: 12px; }
+  #recall-match-btn:hover:not(:disabled) { background: #145730; }
+  .recall-fetch-status { font-size:.82rem; color:#555; margin:6px 0; min-height:20px; }
+  .recall-asset-drop { cursor:pointer; border:2px dashed #bbb; border-radius:10px; padding:22px; text-align:center; background:#fafafa; transition:border-color .2s; }
+  .recall-asset-drop:hover { border-color:#1a3a6b; background:#f0f4ff; }
+  .recall-asset-drop.dragging { border-color:#e08000; background:#fffbf0; }
 
   /* ── 자료 업로드 ── */
   .upload-device-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
@@ -184,7 +208,7 @@
 <!-- ── 탭 ── -->
 <nav class="tab-nav">
   <button class="tab-btn tab-active" id="tab-failure" onclick="switchTab('failure')">🔧 고장 대응</button>
-  <button class="tab-btn" id="tab-recall" onclick="switchTab('recall')">📋 리콜 확인</button>
+  <button class="tab-btn tab-admin" id="tab-recall" onclick="switchTab('recall')">📋 리콜 확인</button>
   <button class="tab-btn tab-admin" id="tab-upload" onclick="switchTab('upload')">📁 자료 업로드</button>
 </nav>
 
@@ -261,34 +285,95 @@
 
   </div><!-- /panel-failure -->
 
-  <!-- ══ 리콜 확인 패널 ══ -->
+  <!-- ══ 리콜 확인 패널 (관리자 전용) ══ -->
   <div id="panel-recall" class="tab-panel">
+
+    <!-- 비관리자 잠금 안내 -->
     <div id="recall-locked" class="card locked-notice">
       🔒 리콜 확인 기능은 <strong>관리자 전용</strong>입니다.<br>
       관리자 비밀번호를 입력하면 이용할 수 있습니다.
       <br><button onclick="openAdminModal()">관리자 로그인</button>
     </div>
+
+    <!-- ① 식약처 회수 목록 조회 -->
     <div class="card admin-only">
-      <div class="card-label">리콜 대조</div>
-      <div class="recall-grid">
-        <div>
-          <label>보유 기기 목록 (JSON)</label>
-          <textarea id="recall-inventory">[
-  {"model":"DI-2200P","lot":"L2401"},
-  {"model":"DI-2200P","lot":"L2402"}
-]</textarea>
+      <div class="card-label">🏥 식약처 회수·판매중지 목록 조회</div>
+      <p style="font-size:.82rem;color:#555;margin:4px 0 10px;">식약처(MFDS) 공공 API를 호출해 현재 회수 대상 의료기기 목록을 가져옵니다.</p>
+      <button id="recall-fetch-btn" onclick="fetchRecallList()">🔄 회수 목록 가져오기</button>
+      <div class="recall-fetch-status" id="recall-fetch-status"></div>
+    </div>
+
+    <!-- ② 병원 자산 업로드 -->
+    <div class="card admin-only">
+      <div class="card-label">📊 병원 자산 업로드 및 매칭 분석</div>
+      <p style="font-size:.82rem;color:#555;margin:4px 0 10px;">
+        엑셀 파일을 업로드하면 식약처 회수 목록과 자동 매칭합니다.<br>
+        <strong>필수 열:</strong> 자산번호, 관리부서명, 사용자, 한글명칭, 모델명, 제조번호, 취득일자, 제조사, 공급사
+      </p>
+      <div class="recall-asset-drop" id="asset-drop-zone"
+           onclick="document.getElementById('asset-excel-input').click()"
+           ondragover="onAssetDragOver(event)" ondragleave="onAssetDragLeave(event)" ondrop="onAssetDrop(event)">
+        📂 <strong>클릭하거나 엑셀(.xlsx)을 드래그</strong>
+        <div id="asset-file-name" style="margin-top:6px;font-size:.8rem;color:#888;"></div>
+      </div>
+      <input type="file" id="asset-excel-input" accept=".xlsx,.xls" style="display:none" onchange="onAssetFileSelected(this)">
+      <button id="recall-match-btn" onclick="runRecallMatch()" disabled>📊 매칭 분석 실행</button>
+    </div>
+
+    <!-- ③ 분석 결과 -->
+    <div class="card admin-only" id="recall-result-card" style="display:none;">
+      <div class="card-label">📋 매칭 분석 결과</div>
+
+      <!-- 요약 통계 -->
+      <div class="recall-summary-grid">
+        <div class="recall-stat">
+          <div class="num" id="rs-assets">—</div>
+          <div class="lbl">업로드 자산</div>
         </div>
-        <div>
-          <label>리콜 공지 목록 (JSON)</label>
-          <textarea id="recall-notice">[
-  {"model":"DI-2200P","lot":"L2401","reason":"압력센서 결함"}
-]</textarea>
+        <div class="recall-stat">
+          <div class="num" id="rs-recalls">—</div>
+          <div class="lbl">식약처 회수 건수</div>
+        </div>
+        <div class="recall-stat">
+          <div class="num danger" id="rs-high">—</div>
+          <div class="lbl">높은 가능성</div>
+        </div>
+        <div class="recall-stat">
+          <div class="num warn" id="rs-review">—</div>
+          <div class="lbl">검토 필요</div>
         </div>
       </div>
-      <button id="recall-btn" onclick="runRecallCheck()">리콜 대조 실행</button>
-      <div id="source-chip" style="display:none;" class="source-chip">근거: /api/recall-check 코드 계산값</div>
+
+      <!-- 결과 탭 -->
+      <div class="recall-tab-bar">
+        <button class="recall-tab active-high" id="rtab-high" onclick="switchRecallTab('high')">🔴 높은 가능성</button>
+        <button class="recall-tab" id="rtab-review" onclick="switchRecallTab('review')">🟡 검토 필요</button>
+      </div>
+
+      <!-- 테이블 -->
+      <div class="recall-table-wrap">
+        <table class="recall-table" id="recall-result-table">
+          <thead>
+            <tr>
+              <th>자산번호</th>
+              <th>한글명칭</th>
+              <th>모델명</th>
+              <th>제조번호</th>
+              <th>관리부서</th>
+              <th>회수품목명</th>
+              <th>회수이유</th>
+              <th>보고일자</th>
+              <th>점수</th>
+              <th>매칭 근거</th>
+            </tr>
+          </thead>
+          <tbody id="recall-result-tbody"></tbody>
+        </table>
+        <div id="recall-no-result" style="display:none;text-align:center;padding:30px;color:#888;font-size:.85rem;">해당 항목 없음</div>
+      </div>
     </div>
-  </div>
+
+  </div><!-- /panel-recall -->
 
   <!-- ══ 자료 업로드 패널 (관리자 전용) ══ -->
   <div id="panel-upload" class="tab-panel">
@@ -624,66 +709,138 @@
     }
   }
 
-  // ── 리콜 대조 ────────────────────────────────────────────────────────
-  async function runRecallCheck() {
+  // ── 리콜: 식약처 회수 목록 조회 ────────────────────────────────────
+  async function fetchRecallList() {
     if (!isAdmin) { openAdminModal(); return; }
-    let inventory, recallNotice;
+    const btn = document.getElementById("recall-fetch-btn");
+    const st  = document.getElementById("recall-fetch-status");
+    btn.disabled = true;
+    st.textContent = "⏳ 식약처 API 조회 중…";
     try {
-      inventory    = JSON.parse(document.getElementById("recall-inventory").value);
-      recallNotice = JSON.parse(document.getElementById("recall-notice").value);
-    } catch { alert("JSON 형식이 올바르지 않습니다."); return; }
-
-    const recallBtn  = document.getElementById("recall-btn");
-    const sourceChip = document.getElementById("source-chip");
-    recallBtn.disabled = true;
-    sourceChip.style.display = "none";
-    switchTab("failure");
-    answerBox.className = "streaming";
-    answerBox.innerHTML = '<span class="cursor"></span>';
-    let accumulated = "";
-    try {
-      const res = await fetch(BE + "/api/recall-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inventory, recall_notice: recallNotice }),
-      });
-      if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
-      const reader  = res.body.getReader();
-      const decoder = new TextDecoder();
-      let   buffer  = "", metaInfo = null;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop();
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          const raw = line.slice(5).trim();
-          if (raw === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(raw);
-            if (parsed.type === "meta") { metaInfo = parsed; }
-            else {
-              accumulated += parsed.token || "";
-              answerBox.innerHTML = accumulated.replace(/</g,"&lt;").replace(/>/g,"&gt;") + '<span class="cursor"></span>';
-            }
-          } catch {}
-        }
+      const res  = await fetch(BE + "/api/mfds/recall-list");
+      const data = await res.json();
+      if (data.ok) {
+        st.innerHTML = `✅ 조회 완료 — 총 <strong>${data.total_count.toLocaleString()}건</strong> 중 <strong>${data.fetched}건</strong> 수신`;
+        st.style.color = "#1a6b3a";
+      } else {
+        st.textContent = `❌ ${data.error}`;
+        st.style.color = "#c0392b";
       }
-      answerBox.textContent = accumulated || "응답 없음";
-      answerBox.className = "";
-      if (metaInfo) {
-        sourceChip.textContent =
-          `근거: /api/recall-check 코드 계산값 — 대상 ${metaInfo.matched}건(${metaInfo.matched_lots.join(", ") || "없음"}), 대상 아님 ${metaInfo.safe}건(${metaInfo.safe_lots.join(", ") || "없음"})`;
-      }
-      sourceChip.style.display = "inline-block";
-    } catch (err) {
-      answerBox.textContent = "오류: " + err.message;
-      answerBox.className = "err-state";
+    } catch (e) {
+      st.textContent = `❌ 네트워크 오류: ${e.message}`;
+      st.style.color = "#c0392b";
     } finally {
-      recallBtn.disabled = false;
+      btn.disabled = false;
     }
+  }
+
+  // ── 리콜: 병원 자산 엑셀 파일 선택 ─────────────────────────────────
+  let assetFile = null;
+
+  function onAssetFileSelected(input) {
+    assetFile = input.files[0] ?? null;
+    const nm = document.getElementById("asset-file-name");
+    if (assetFile) {
+      nm.textContent = `선택: ${assetFile.name}  (${(assetFile.size/1024).toFixed(0)} KB)`;
+      document.getElementById("recall-match-btn").disabled = false;
+    } else {
+      nm.textContent = "";
+      document.getElementById("recall-match-btn").disabled = true;
+    }
+  }
+  function onAssetDragOver(e)  { e.preventDefault(); document.getElementById("asset-drop-zone").classList.add("dragging"); }
+  function onAssetDragLeave()  { document.getElementById("asset-drop-zone").classList.remove("dragging"); }
+  function onAssetDrop(e) {
+    e.preventDefault();
+    document.getElementById("asset-drop-zone").classList.remove("dragging");
+    const f = e.dataTransfer.files[0];
+    if (!f) return;
+    const inp = document.getElementById("asset-excel-input");
+    const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files;
+    onAssetFileSelected(inp);
+  }
+
+  // ── 리콜: 매칭 분석 실행 ────────────────────────────────────────────
+  let _recallData = { high: [], review: [] };
+
+  async function runRecallMatch() {
+    if (!isAdmin) { openAdminModal(); return; }
+    if (!assetFile) return;
+    const btn = document.getElementById("recall-match-btn");
+    btn.disabled = true;
+    btn.textContent = "⏳ 분석 중…";
+    document.getElementById("recall-result-card").style.display = "none";
+
+    const formData = new FormData();
+    formData.append("file", assetFile);
+
+    try {
+      const res  = await fetch(BE + "/api/mfds/match", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!data.ok) { alert(`분석 오류: ${data.error}`); return; }
+
+      _recallData = { high: data.high || [], review: data.review || [] };
+
+      document.getElementById("rs-assets").textContent  = data.asset_count.toLocaleString();
+      document.getElementById("rs-recalls").textContent = data.fetched_recall.toLocaleString();
+      document.getElementById("rs-high").textContent    = data.high_count.toLocaleString();
+      document.getElementById("rs-review").textContent  = data.review_count.toLocaleString();
+
+      document.getElementById("recall-result-card").style.display = "block";
+      switchRecallTab("high");
+    } catch (e) {
+      alert(`네트워크 오류: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "📊 매칭 분석 실행";
+    }
+  }
+
+  // ── 리콜: 결과 탭 전환 ──────────────────────────────────────────────
+  function switchRecallTab(tab) {
+    const btnH = document.getElementById("rtab-high");
+    const btnR = document.getElementById("rtab-review");
+    btnH.className = "recall-tab" + (tab === "high"   ? " active-high"   : "");
+    btnR.className = "recall-tab" + (tab === "review" ? " active-review" : "");
+
+    const rows = tab === "high" ? _recallData.high : _recallData.review;
+    const tbody = document.getElementById("recall-result-tbody");
+    const noResult = document.getElementById("recall-no-result");
+
+    if (!rows.length) {
+      tbody.innerHTML = "";
+      noResult.style.display = "block";
+      return;
+    }
+    noResult.style.display = "none";
+
+    const scoreColor = (s) => s >= 100 ? "#c0392b" : s >= 70 ? "#e04000" : "#e08000";
+    const fmtDate = (d) => {
+      if (!d) return "—";
+      const s = String(d).replace(/\D/g, "");
+      return s.length === 8 ? `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}` : d;
+    };
+
+    tbody.innerHTML = rows.map(r => {
+      const sc = r["점수"] || 0;
+      const pct = Math.min(sc, 100);
+      const col = scoreColor(sc);
+      return `<tr>
+        <td>${r["자산번호"] || "—"}</td>
+        <td><strong>${r["한글명칭"] || "—"}</strong></td>
+        <td>${r["모델명"] || "—"}</td>
+        <td>${r["제조번호"] || "—"}</td>
+        <td>${r["관리부서명"] || "—"}</td>
+        <td style="color:#c0392b;font-weight:700;">${r["회수품목명"] || "—"}</td>
+        <td style="font-size:.74rem;">${r["회수이유"] || "—"}</td>
+        <td style="white-space:nowrap;">${fmtDate(r["보고일자"])}</td>
+        <td style="white-space:nowrap;">
+          <span class="score-bar"><span class="score-fill" style="width:${pct}%;background:${col};"></span></span>
+          <strong style="color:${col};">${sc}</strong>
+        </td>
+        <td style="font-size:.74rem;color:#555;">${r["근거"] || "—"}</td>
+      </tr>`;
+    }).join("");
   }
 </script>
 

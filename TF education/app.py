@@ -4,9 +4,16 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import re
 import io
+import difflib
 import httpx
 import json
 import numpy as np
+
+try:
+    import openpyxl as _openpyxl
+    _XLSX_OK = True
+except ImportError:
+    _XLSX_OK = False
 
 try:
     import fitz          # pymupdf — PDF 텍스트 추출
@@ -187,6 +194,135 @@ RECALL_SYSTEM_PROMPT = (
     "아래 [리콜대조결과]에 적힌 숫자와 로트만 인용해 한국어로 한두 줄로 답하라. "
     "결과에 없는 로트·건수를 지어내지 마라."
 )
+
+# ── 식약처 회수·판매중지 API ──────────────────────────────────────────
+MFDS_API_KEY  = "676b69cc8ef1404d6caaf718caf7ce1e58eb9ba9b9621cf6846af395fb72c50a"
+MFDS_API_BASE = "https://apis.data.go.kr/1471000/MdlpRtrvlSleStpgeInfoService02"
+MFDS_OP       = "getMdlpRtrvlSleStpgeInfo02"
+
+# 식약처 API 응답 필드 정규화 매핑 (lower-case 변환 후 적용)
+_MFDS_FIELD_MAP = {
+    "item_name": ["item_name", "item_nm", "prdlst_nm", "prdt_nm", "prdnm", "itemnm"],
+    "mdl_nm":    ["mdl_nm", "model_nm", "model_name", "modelnm"],
+    "lot_no":    ["lot_no", "lotno", "mfg_no", "mfgno", "serial_no"],
+    "entp_name": ["entp_name", "entp_nm", "mnfctr_nm", "company_name", "entpnm"],
+    "reprt_de":  ["reprt_de", "reprtde", "recall_de", "rtrvl_de", "rtrvlde", "de"],
+    "rtrvl_resn":["rtrvl_resn", "rtrvlresn", "recall_resn", "reason", "resn"],
+    "item_permit_no": ["item_permit_no", "itempermitno", "permit_no"],
+}
+
+def _mfds_normalize(raw: dict) -> dict:
+    """API 응답 항목을 통일된 필드명으로 정규화."""
+    lower = {k.lower(): v for k, v in raw.items()}
+    out = dict(lower)  # 원본 보존
+    for std_key, candidates in _MFDS_FIELD_MAP.items():
+        for c in candidates:
+            if c in lower and lower[c]:
+                out[std_key] = str(lower[c]).strip()
+                break
+        if std_key not in out:
+            out[std_key] = ""
+    return out
+
+async def _fetch_all_mfds(max_items: int = 2000) -> tuple[list[dict], int]:
+    """식약처 API에서 전체 회수 목록 페이지 순회 조회."""
+    rows_per_page, all_items, page = 100, [], 1
+    total_count = 0
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        while len(all_items) < max_items:
+            # serviceKey를 URL에 직접 포함 (공공데이터포털 이중인코딩 방지)
+            url = (
+                f"{MFDS_API_BASE}/{MFDS_OP}"
+                f"?serviceKey={MFDS_API_KEY}"
+                f"&pageNo={page}&numOfRows={rows_per_page}&type=json"
+            )
+            res = await client.get(url)
+            if res.status_code == 500:
+                raise RuntimeError(
+                    "식약처 API 응답 오류(500) — 공공데이터포털에서 해당 서비스 활성화 여부를 확인하세요. "
+                    "(마이페이지 → 활용신청 → MdlpRtrvlSleStpgeInfoService02 승인 상태 확인)"
+                )
+            res.raise_for_status()
+            try:
+                data = res.json()
+            except Exception:
+                # XML 응답이면 오류 코드 추출 시도
+                text = res.text
+                if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in text:
+                    raise RuntimeError("서비스 키가 등록되지 않았습니다. 공공데이터포털에서 API 활용신청을 완료하세요.")
+                raise RuntimeError(f"API 응답 파싱 실패: {text[:200]}")
+            # 공공데이터포털 XML 에러를 JSON으로 반환하는 경우 처리
+            if "OpenAPI_ServiceResponse" in str(data):
+                raise RuntimeError(f"API 오류 응답: {str(data)[:200]}")
+            body  = data.get("response", {}).get("body", {})
+            items = body.get("items", [])
+            if isinstance(items, dict):   # 단건 응답
+                items = [items]
+            if not items:
+                break
+            total_count = int(body.get("totalCount", total_count) or 0)
+            all_items.extend([_mfds_normalize(it) for it in items])
+            if len(all_items) >= total_count or len(items) < rows_per_page:
+                break
+            page += 1
+    return all_items, total_count
+
+def _sim(a: str, b: str) -> float:
+    a = re.sub(r"\s+", " ", str(a or "")).strip().lower()
+    b = re.sub(r"\s+", " ", str(b or "")).strip().lower()
+    if not a or not b:
+        return 0.0
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+def _score_asset_vs_recall(asset: dict, recall: dict) -> tuple[int, list[str]]:
+    """자산 1건 vs 회수 항목 1건 → (점수, 근거 목록).
+    점수 체계: 제조번호 일치=+100, 한글명칭 유사도×50, 모델명×30, 제조사×20 (합산 최대 200)
+    """
+    score, reasons = 0, []
+
+    # 제조번호 일치 (최우선 100점)
+    a_lot = re.sub(r"\s+", "", str(asset.get("제조번호", ""))).lower()
+    r_lot = re.sub(r"\s+", "", str(recall.get("lot_no", ""))).lower()
+    if a_lot and r_lot and a_lot == r_lot:
+        score += 100
+        reasons.append(f"제조번호 일치 ({asset.get('제조번호','')})")
+
+    # 한글명칭 유사도 (0-50점)
+    nr = _sim(asset.get("한글명칭", ""), recall.get("item_name", ""))
+    ns = int(nr * 50)
+    if ns >= 5:
+        score += ns
+        reasons.append(f"품목명 유사도 {int(nr*100)}%")
+
+    # 모델명 유사도 (0-30점)
+    mr = _sim(asset.get("모델명", ""), recall.get("mdl_nm", ""))
+    ms = int(mr * 30)
+    if ms >= 5:
+        score += ms
+        reasons.append(f"모델명 유사도 {int(mr*100)}%")
+
+    # 제조사 유사도 (0-20점)
+    er = _sim(asset.get("제조사", ""), recall.get("entp_name", ""))
+    es = int(er * 20)
+    if es >= 5:
+        score += es
+        reasons.append(f"제조사 유사도 {int(er*100)}%")
+
+    return score, reasons
+
+def _parse_excel_assets(xlsx_bytes: bytes) -> list[dict]:
+    if not _XLSX_OK:
+        raise RuntimeError("openpyxl 패키지가 필요합니다: pip install openpyxl")
+    wb = _openpyxl.load_workbook(io.BytesIO(xlsx_bytes), data_only=True)
+    ws = wb.active
+    headers = [str(cell.value or "").strip() for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    assets = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if all(v is None for v in row):
+            continue
+        assets.append({headers[i]: (str(v).strip() if v is not None else "")
+                       for i, v in enumerate(row) if i < len(headers)})
+    return assets
 
 
 # ── 임베딩 유틸 ──────────────────────────────────────────────────────
@@ -432,6 +568,100 @@ async def recall_check(req: RecallCheckRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── 식약처 회수 목록 조회 ─────────────────────────────────────────────
+@app.get("/api/mfds/recall-list")
+async def mfds_recall_list():
+    """식약처 회수·판매중지 목록 조회 (전체 페이지)."""
+    try:
+        items, total_count = await _fetch_all_mfds()
+        # 보고일자 내림차순 정렬
+        items.sort(key=lambda x: x.get("reprt_de", ""), reverse=True)
+        return {"ok": True, "total_count": total_count, "fetched": len(items), "items": items}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ── 병원 자산 엑셀 업로드 + 회수 매칭 분석 ──────────────────────────
+@app.post("/api/mfds/match")
+async def mfds_match(file: UploadFile = File(...)):
+    """엑셀 자산 파일 업로드 → 식약처 API 매칭 분석."""
+    # 1. 엑셀 파싱
+    try:
+        xlsx_bytes = await file.read()
+        assets = _parse_excel_assets(xlsx_bytes)
+    except RuntimeError as e:
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        return {"ok": False, "error": f"엑셀 파싱 오류: {e}"}
+
+    if not assets:
+        return {"ok": False, "error": "엑셀에서 자산 데이터를 읽을 수 없습니다."}
+
+    # 2. 식약처 API 전체 조회
+    try:
+        recall_items, total_recall = await _fetch_all_mfds()
+    except Exception as e:
+        return {"ok": False, "error": f"식약처 API 오류: {e}"}
+
+    # 보고일자 내림차순 정렬
+    recall_items.sort(key=lambda x: x.get("reprt_de", ""), reverse=True)
+
+    # 3. 자산 × 회수 항목 매칭 (자산당 최고 점수 회수 항목 1건만)
+    HIGH_THRESHOLD   = 70   # 높은 가능성
+    REVIEW_THRESHOLD = 30   # 검토 필요
+
+    high_list, review_list = [], []
+
+    for asset in assets:
+        best_score, best_recall, best_reasons = 0, None, []
+        for recall in recall_items:
+            sc, rsn = _score_asset_vs_recall(asset, recall)
+            if sc > best_score:
+                best_score, best_recall, best_reasons = sc, recall, rsn
+
+        if best_score < REVIEW_THRESHOLD or best_recall is None:
+            continue
+
+        row = {
+            "자산번호":   asset.get("자산번호", ""),
+            "관리부서명": asset.get("관리부서명", ""),
+            "사용자":     asset.get("사용자", ""),
+            "한글명칭":   asset.get("한글명칭", ""),
+            "모델명":     asset.get("모델명", ""),
+            "제조번호":   asset.get("제조번호", ""),
+            "취득일자":   asset.get("취득일자", ""),
+            "제조사":     asset.get("제조사", ""),
+            "공급사":     asset.get("공급사", ""),
+            "회수품목명": best_recall.get("item_name", ""),
+            "회수모델명": best_recall.get("mdl_nm", ""),
+            "회수제조번호": best_recall.get("lot_no", ""),
+            "회수이유":   best_recall.get("rtrvl_resn", ""),
+            "보고일자":   best_recall.get("reprt_de", ""),
+            "허가번호":   best_recall.get("item_permit_no", ""),
+            "점수":       best_score,
+            "근거":       " / ".join(best_reasons),
+        }
+        if best_score >= HIGH_THRESHOLD:
+            high_list.append(row)
+        else:
+            review_list.append(row)
+
+    # 보고일자 내림차순 정렬
+    high_list.sort(key=lambda x: x.get("보고일자", ""), reverse=True)
+    review_list.sort(key=lambda x: x.get("보고일자", ""), reverse=True)
+
+    return {
+        "ok": True,
+        "asset_count":  len(assets),
+        "recall_count": total_recall,
+        "fetched_recall": len(recall_items),
+        "high_count":   len(high_list),
+        "review_count": len(review_list),
+        "high":   high_list,
+        "review": review_list,
+    }
 
 
 # ── PDF 파싱 헬퍼 ─────────────────────────────────────────────────────
