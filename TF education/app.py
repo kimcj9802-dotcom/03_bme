@@ -195,73 +195,63 @@ RECALL_SYSTEM_PROMPT = (
     "결과에 없는 로트·건수를 지어내지 마라."
 )
 
-# ── 식약처 회수·판매중지 API ──────────────────────────────────────────
+# ── 식약처 회수·판매중지 API (IROS_16 v1.1 기준) ────────────────────
+# 참고문서: 오퍼레이션명은 getItemNameList / getSerialNumList 등
+# ServiceKey 파라미터는 대문자 S·K (URL 직접 삽입, 이중인코딩 금지)
 MFDS_API_KEY  = "676b69cc8ef1404d6caaf718caf7ce1e58eb9ba9b9621cf6846af395fb72c50a"
-MFDS_API_BASE = "https://apis.data.go.kr/1471000/MdlpRtrvlSleStpgeInfoService02"
-MFDS_OP       = "getMdlpRtrvlSleStpgeInfo02"
+MFDS_API_BASE = "https://apis.data.go.kr/1471000/MdlpRtrvlSleStpgeInfoService01"
 
-# 식약처 API 응답 필드 정규화 매핑 (lower-case 변환 후 적용)
-_MFDS_FIELD_MAP = {
-    "item_name": ["item_name", "item_nm", "prdlst_nm", "prdt_nm", "prdnm", "itemnm"],
-    "mdl_nm":    ["mdl_nm", "model_nm", "model_name", "modelnm"],
-    "lot_no":    ["lot_no", "lotno", "mfg_no", "mfgno", "serial_no"],
-    "entp_name": ["entp_name", "entp_nm", "mnfctr_nm", "company_name", "entpnm"],
-    "reprt_de":  ["reprt_de", "reprtde", "recall_de", "rtrvl_de", "rtrvlde", "de"],
-    "rtrvl_resn":["rtrvl_resn", "rtrvlresn", "recall_resn", "reason", "resn"],
-    "item_permit_no": ["item_permit_no", "itempermitno", "permit_no"],
-}
+# ── getItemNameList 응답 필드 (문서 기준) ──────────────────────────────
+# ITEM_NAME, RECALL_ITEM_SEQ, DEPT_RECEIPT_NO,
+# REPORT_STATE_CODE, REPORT_STATE_NAME, REPORT_SUBMIT_DATE,
+# REPORT_KIND_CODE, REPORT_KIND_NAME, MEDDEV_ITEM_SEQ, MEA_CLASS_NAME
+#
+# getSerialNumList 응답 필드:
+# SERIAL_NUM(제조번호), RECALL_ITEM_SEQ, REPORT_SUBMIT_DATE 등
 
-def _mfds_normalize(raw: dict) -> dict:
-    """API 응답 항목을 통일된 필드명으로 정규화."""
-    lower = {k.lower(): v for k, v in raw.items()}
-    out = dict(lower)  # 원본 보존
-    for std_key, candidates in _MFDS_FIELD_MAP.items():
-        for c in candidates:
-            if c in lower and lower[c]:
-                out[std_key] = str(lower[c]).strip()
-                break
-        if std_key not in out:
-            out[std_key] = ""
-    return out
+async def _mfds_call(client: httpx.AsyncClient, op: str, extra: dict | None = None,
+                     page: int = 1, rows: int = 100) -> dict:
+    """식약처 API 단일 페이지 호출. 응답 body dict 반환."""
+    # ServiceKey를 URL에 직접 삽입 (공공데이터포털 이중인코딩 방지)
+    qs = f"ServiceKey={MFDS_API_KEY}&pageNo={page}&numOfRows={rows}&type=json"
+    if extra:
+        for k, v in extra.items():
+            qs += f"&{k}={v}"
+    url = f"{MFDS_API_BASE}/{op}?{qs}"
+    res = await client.get(url)
+    if res.status_code == 500:
+        raise RuntimeError(
+            "식약처 API 오류(500) — 공공데이터포털 마이페이지에서 "
+            "'MdlpRtrvlSleStpgeInfoService01' 서비스 승인 여부를 확인하세요."
+        )
+    if res.status_code == 404:
+        raise RuntimeError(f"식약처 API 오퍼레이션 '{op}' 를 찾을 수 없습니다(404).")
+    res.raise_for_status()
+    try:
+        data = res.json()
+    except Exception:
+        txt = res.text
+        if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in txt:
+            raise RuntimeError("API 키가 등록되지 않았습니다. 공공데이터포털에서 활용신청을 완료하세요.")
+        raise RuntimeError(f"응답 파싱 실패: {txt[:300]}")
+    return data.get("response", {}).get("body", {})
 
-async def _fetch_all_mfds(max_items: int = 2000) -> tuple[list[dict], int]:
-    """식약처 API에서 전체 회수 목록 페이지 순회 조회."""
-    rows_per_page, all_items, page = 100, [], 1
-    total_count = 0
+async def _mfds_all_pages(op: str, extra: dict | None = None,
+                          max_items: int = 3000, rows_per_page: int = 100) -> tuple[list[dict], int]:
+    """식약처 API 전체 페이지 순회 조회. (items 목록, totalCount) 반환."""
+    all_items, page, total_count = [], 1, 0
     async with httpx.AsyncClient(timeout=30.0) as client:
         while len(all_items) < max_items:
-            # serviceKey를 URL에 직접 포함 (공공데이터포털 이중인코딩 방지)
-            url = (
-                f"{MFDS_API_BASE}/{MFDS_OP}"
-                f"?serviceKey={MFDS_API_KEY}"
-                f"&pageNo={page}&numOfRows={rows_per_page}&type=json"
-            )
-            res = await client.get(url)
-            if res.status_code == 500:
-                raise RuntimeError(
-                    "식약처 API 응답 오류(500) — 공공데이터포털에서 해당 서비스 활성화 여부를 확인하세요. "
-                    "(마이페이지 → 활용신청 → MdlpRtrvlSleStpgeInfoService02 승인 상태 확인)"
-                )
-            res.raise_for_status()
-            try:
-                data = res.json()
-            except Exception:
-                # XML 응답이면 오류 코드 추출 시도
-                text = res.text
-                if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in text:
-                    raise RuntimeError("서비스 키가 등록되지 않았습니다. 공공데이터포털에서 API 활용신청을 완료하세요.")
-                raise RuntimeError(f"API 응답 파싱 실패: {text[:200]}")
-            # 공공데이터포털 XML 에러를 JSON으로 반환하는 경우 처리
-            if "OpenAPI_ServiceResponse" in str(data):
-                raise RuntimeError(f"API 오류 응답: {str(data)[:200]}")
-            body  = data.get("response", {}).get("body", {})
+            body  = await _mfds_call(client, op, extra, page, rows_per_page)
             items = body.get("items", [])
-            if isinstance(items, dict):   # 단건 응답
+            if isinstance(items, dict):          # 단건이면 리스트로 변환
                 items = [items]
             if not items:
                 break
             total_count = int(body.get("totalCount", total_count) or 0)
-            all_items.extend([_mfds_normalize(it) for it in items])
+            # 필드명 소문자 통일
+            all_items.extend([{k.upper(): str(v or "").strip() for k, v in it.items()}
+                               for it in items])
             if len(all_items) >= total_count or len(items) < rows_per_page:
                 break
             page += 1
@@ -274,39 +264,43 @@ def _sim(a: str, b: str) -> float:
         return 0.0
     return difflib.SequenceMatcher(None, a, b).ratio()
 
-def _score_asset_vs_recall(asset: dict, recall: dict) -> tuple[int, list[str]]:
+def _score_asset_vs_recall(asset: dict, recall: dict,
+                            serial_hit_set: set[str] | None = None) -> tuple[int, list[str]]:
     """자산 1건 vs 회수 항목 1건 → (점수, 근거 목록).
-    점수 체계: 제조번호 일치=+100, 한글명칭 유사도×50, 모델명×30, 제조사×20 (합산 최대 200)
+    점수 체계:
+      제조번호 일치   = +100 (최우선 — serial_hit_set 또는 recall의 SERIAL_NUM 직접 비교)
+      품목명 유사도   =  0~50
+      분류명 유사도   =  0~20  (MEA_CLASS_NAME)
+      합산 최대 170점, 높은 가능성: ≥70, 검토 필요: 30~69
     """
     score, reasons = 0, []
 
-    # 제조번호 일치 (최우선 100점)
-    a_lot = re.sub(r"\s+", "", str(asset.get("제조번호", ""))).lower()
-    r_lot = re.sub(r"\s+", "", str(recall.get("lot_no", ""))).lower()
-    if a_lot and r_lot and a_lot == r_lot:
+    # 1) 제조번호 일치 (최우선 100점)
+    a_serial = re.sub(r"\s+", "", str(asset.get("제조번호", ""))).lower()
+    r_serial  = re.sub(r"\s+", "", str(recall.get("SERIAL_NUM", ""))).lower()
+    serial_match = False
+    if a_serial:
+        if (r_serial and a_serial == r_serial):
+            serial_match = True
+        elif serial_hit_set and a_serial in serial_hit_set:
+            serial_match = True
+    if serial_match:
         score += 100
         reasons.append(f"제조번호 일치 ({asset.get('제조번호','')})")
 
-    # 한글명칭 유사도 (0-50점)
-    nr = _sim(asset.get("한글명칭", ""), recall.get("item_name", ""))
+    # 2) 품목명 유사도 (0-50점) — ITEM_NAME vs 한글명칭
+    nr = _sim(asset.get("한글명칭", ""), recall.get("ITEM_NAME", ""))
     ns = int(nr * 50)
     if ns >= 5:
         score += ns
         reasons.append(f"품목명 유사도 {int(nr*100)}%")
 
-    # 모델명 유사도 (0-30점)
-    mr = _sim(asset.get("모델명", ""), recall.get("mdl_nm", ""))
-    ms = int(mr * 30)
-    if ms >= 5:
-        score += ms
-        reasons.append(f"모델명 유사도 {int(mr*100)}%")
-
-    # 제조사 유사도 (0-20점)
-    er = _sim(asset.get("제조사", ""), recall.get("entp_name", ""))
-    es = int(er * 20)
-    if es >= 5:
-        score += es
-        reasons.append(f"제조사 유사도 {int(er*100)}%")
+    # 3) 분류명 유사도 (0-20점) — MEA_CLASS_NAME vs 한글명칭(보조)
+    cr = _sim(asset.get("한글명칭", ""), recall.get("MEA_CLASS_NAME", ""))
+    cs = int(cr * 20)
+    if cs >= 5:
+        score += cs
+        reasons.append(f"분류명 유사도 {int(cr*100)}%")
 
     return score, reasons
 
@@ -573,11 +567,11 @@ async def recall_check(req: RecallCheckRequest):
 # ── 식약처 회수 목록 조회 ─────────────────────────────────────────────
 @app.get("/api/mfds/recall-list")
 async def mfds_recall_list():
-    """식약처 회수·판매중지 목록 조회 (전체 페이지)."""
+    """식약처 getItemNameList 전체 조회."""
     try:
-        items, total_count = await _fetch_all_mfds()
-        # 보고일자 내림차순 정렬
-        items.sort(key=lambda x: x.get("reprt_de", ""), reverse=True)
+        items, total_count = await _mfds_all_pages("getItemNameList")
+        # REPORT_SUBMIT_DATE 내림차순 정렬
+        items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
         return {"ok": True, "total_count": total_count, "fetched": len(items), "items": items}
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -586,7 +580,12 @@ async def mfds_recall_list():
 # ── 병원 자산 엑셀 업로드 + 회수 매칭 분석 ──────────────────────────
 @app.post("/api/mfds/match")
 async def mfds_match(file: UploadFile = File(...)):
-    """엑셀 자산 파일 업로드 → 식약처 API 매칭 분석."""
+    """엑셀 자산 파일 업로드 → 식약처 API 매칭 분석.
+    전략:
+      1) getItemNameList (필터 없음) → 전체 회수 품목
+      2) 각 자산의 제조번호로 getSerialNumList 조회 → 제조번호 히트셋 구성
+      3) 점수 계산: 제조번호 일치=100, 품목명 유사도×50, 분류명 유사도×20
+    """
     # 1. 엑셀 파싱
     try:
         xlsx_bytes = await file.read()
@@ -599,25 +598,47 @@ async def mfds_match(file: UploadFile = File(...)):
     if not assets:
         return {"ok": False, "error": "엑셀에서 자산 데이터를 읽을 수 없습니다."}
 
-    # 2. 식약처 API 전체 조회
+    # 2a. 식약처 getItemNameList 전체 조회
     try:
-        recall_items, total_recall = await _fetch_all_mfds()
+        recall_items, total_recall = await _mfds_all_pages("getItemNameList")
     except Exception as e:
         return {"ok": False, "error": f"식약처 API 오류: {e}"}
 
-    # 보고일자 내림차순 정렬
-    recall_items.sort(key=lambda x: x.get("reprt_de", ""), reverse=True)
+    # 2b. 제조번호 히트셋 구성
+    # 자산 중 제조번호가 있는 것들만 getSerialNumList로 추가 조회
+    serial_hit: set[str] = set()   # 매칭된 제조번호 (lower-case, 공백 제거)
+    unique_serials = {
+        re.sub(r"\s+", "", str(a.get("제조번호", ""))).lower()
+        for a in assets
+        if str(a.get("제조번호", "")).strip()
+    }
+    if unique_serials:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                for serial in unique_serials:
+                    body = await _mfds_call(client, "getSerialNumList",
+                                            extra={"serial_num": serial}, rows=10)
+                    its = body.get("items", [])
+                    if isinstance(its, dict):
+                        its = [its]
+                    if its:
+                        serial_hit.add(serial)
+        except Exception:
+            pass   # 제조번호 조회 실패 시 무시 (점수에서만 반영 안 됨)
 
-    # 3. 자산 × 회수 항목 매칭 (자산당 최고 점수 회수 항목 1건만)
-    HIGH_THRESHOLD   = 70   # 높은 가능성
-    REVIEW_THRESHOLD = 30   # 검토 필요
+    # REPORT_SUBMIT_DATE 내림차순 정렬
+    recall_items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
+
+    # 3. 자산 × 회수 항목 매칭 (자산당 최고 점수 회수 항목 1건)
+    HIGH_THRESHOLD   = 70
+    REVIEW_THRESHOLD = 30
 
     high_list, review_list = [], []
 
     for asset in assets:
         best_score, best_recall, best_reasons = 0, None, []
         for recall in recall_items:
-            sc, rsn = _score_asset_vs_recall(asset, recall)
+            sc, rsn = _score_asset_vs_recall(asset, recall, serial_hit)
             if sc > best_score:
                 best_score, best_recall, best_reasons = sc, recall, rsn
 
@@ -625,23 +646,23 @@ async def mfds_match(file: UploadFile = File(...)):
             continue
 
         row = {
-            "자산번호":   asset.get("자산번호", ""),
-            "관리부서명": asset.get("관리부서명", ""),
-            "사용자":     asset.get("사용자", ""),
-            "한글명칭":   asset.get("한글명칭", ""),
-            "모델명":     asset.get("모델명", ""),
-            "제조번호":   asset.get("제조번호", ""),
-            "취득일자":   asset.get("취득일자", ""),
-            "제조사":     asset.get("제조사", ""),
-            "공급사":     asset.get("공급사", ""),
-            "회수품목명": best_recall.get("item_name", ""),
-            "회수모델명": best_recall.get("mdl_nm", ""),
-            "회수제조번호": best_recall.get("lot_no", ""),
-            "회수이유":   best_recall.get("rtrvl_resn", ""),
-            "보고일자":   best_recall.get("reprt_de", ""),
-            "허가번호":   best_recall.get("item_permit_no", ""),
-            "점수":       best_score,
-            "근거":       " / ".join(best_reasons),
+            "자산번호":     asset.get("자산번호", ""),
+            "관리부서명":   asset.get("관리부서명", ""),
+            "사용자":       asset.get("사용자", ""),
+            "한글명칭":     asset.get("한글명칭", ""),
+            "모델명":       asset.get("모델명", ""),
+            "제조번호":     asset.get("제조번호", ""),
+            "취득일자":     asset.get("취득일자", ""),
+            "제조사":       asset.get("제조사", ""),
+            "공급사":       asset.get("공급사", ""),
+            "회수품목명":   best_recall.get("ITEM_NAME", ""),
+            "회수분류명":   best_recall.get("MEA_CLASS_NAME", ""),
+            "부서접수번호": best_recall.get("DEPT_RECEIPT_NO", ""),
+            "회수보고구분": best_recall.get("REPORT_KIND_NAME", ""),
+            "보고상태":     best_recall.get("REPORT_STATE_NAME", ""),
+            "보고일자":     best_recall.get("REPORT_SUBMIT_DATE", ""),
+            "점수":         best_score,
+            "근거":         " / ".join(best_reasons),
         }
         if best_score >= HIGH_THRESHOLD:
             high_list.append(row)

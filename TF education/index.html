@@ -831,8 +831,8 @@
         <td>${r["모델명"] || "—"}</td>
         <td>${r["제조번호"] || "—"}</td>
         <td>${r["관리부서명"] || "—"}</td>
-        <td style="color:#c0392b;font-weight:700;">${r["회수품목명"] || "—"}</td>
-        <td style="font-size:.74rem;">${r["회수이유"] || "—"}</td>
+        <td style="color:#c0392b;font-weight:700;">${r["회수품목명"] || "—"}<br><span style="font-size:.7rem;color:#999;">${r["회수분류명"] || ""}</span></td>
+        <td style="font-size:.74rem;">${r["회수보고구분"] || "—"} / ${r["보고상태"] || "—"}</td>
         <td style="white-space:nowrap;">${fmtDate(r["보고일자"])}</td>
         <td style="white-space:nowrap;">
           <span class="score-bar"><span class="score-fill" style="width:${pct}%;background:${col};"></span></span>
