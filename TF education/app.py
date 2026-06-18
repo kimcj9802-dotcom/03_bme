@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+﻿from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -197,9 +197,9 @@ RECALL_SYSTEM_PROMPT = (
 
 # ── 식약처 회수·판매중지 API (IROS_16 v1.1 기준) ────────────────────
 # 참고문서: 오퍼레이션명은 getItemNameList / getSerialNumList 등
-# ServiceKey 파라미터는 대문자 S·K (URL 직접 삽입, 이중인코딩 금지)
+# 주의: 서비스명에 숫자 1 포함(소문자 l 아님). 파라미터는 serviceKey (소문자 s)
 MFDS_API_KEY  = "676b69cc8ef1404d6caaf718caf7ce1e58eb9ba9b9621cf6846af395fb72c50a"
-MFDS_API_BASE = "https://apis.data.go.kr/1471000/MdlpRtrvlSleStpgeInfoService01"
+MFDS_API_BASE = "https://apis.data.go.kr/1471000/MdlpRtrv1S1eStpgeInfoService02"
 
 # ── getItemNameList 응답 필드 (문서 기준) ──────────────────────────────
 # ITEM_NAME, RECALL_ITEM_SEQ, DEPT_RECEIPT_NO,
@@ -213,7 +213,7 @@ async def _mfds_call(client: httpx.AsyncClient, op: str, extra: dict | None = No
                      page: int = 1, rows: int = 100) -> dict:
     """식약처 API 단일 페이지 호출. 응답 body dict 반환."""
     # ServiceKey를 URL에 직접 삽입 (공공데이터포털 이중인코딩 방지)
-    qs = f"ServiceKey={MFDS_API_KEY}&pageNo={page}&numOfRows={rows}&type=json"
+    qs = f"serviceKey={MFDS_API_KEY}&pageNo={page}&numOfRows={rows}&type=json"
     if extra:
         for k, v in extra.items():
             qs += f"&{k}={v}"
@@ -577,7 +577,7 @@ async def recall_check(req: RecallCheckRequest):
 async def mfds_recall_list():
     """식약처 getItemNameList 전체 조회."""
     try:
-        items, total_count = await _mfds_all_pages("getItemNameList")
+        items, total_count = await _mfds_all_pages("getItemNameList01")
         # REPORT_SUBMIT_DATE 내림차순 정렬
         items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
         return {"ok": True, "total_count": total_count, "fetched": len(items), "items": items}
@@ -608,7 +608,7 @@ async def mfds_match(file: UploadFile = File(...)):
 
     # 2a. 식약처 getItemNameList 전체 조회
     try:
-        recall_items, total_recall = await _mfds_all_pages("getItemNameList")
+        recall_items, total_recall = await _mfds_all_pages("getItemNameList01")
     except Exception as e:
         return {"ok": False, "error": f"식약처 API 오류: {e}"}
 
@@ -624,7 +624,7 @@ async def mfds_match(file: UploadFile = File(...)):
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 for serial in unique_serials:
-                    body = await _mfds_call(client, "getSerialNumList",
+                    body = await _mfds_call(client, "getSerialNumList01",
                                             extra={"serial_num": serial}, rows=10)
                     its = body.get("items", [])
                     if isinstance(its, dict):
@@ -870,3 +870,5 @@ async def debug_retrieve(req: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+
+
