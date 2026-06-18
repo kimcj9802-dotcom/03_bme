@@ -221,11 +221,19 @@ async def _mfds_call(client: httpx.AsyncClient, op: str, extra: dict | None = No
     res = await client.get(url)
     if res.status_code == 500:
         raise RuntimeError(
-            "식약처 API 오류(500) — 공공데이터포털 마이페이지에서 "
-            "'MdlpRtrvlSleStpgeInfoService01' 서비스 승인 여부를 확인하세요."
+            "식약처 API 서버 오류(500)\n\n"
+            "현재 공공데이터포털 API 서버에서 오류가 반환되고 있습니다.\n"
+            "가능한 원인:\n"
+            "① 인증키 활성화가 아직 서버에 반영되지 않음 (승인 후 24시간 대기)\n"
+            "② 공공데이터포털 API 서버 일시 점검 중\n"
+            "③ '공공데이터포털 > 마이페이지 > 개발계정'에서 해당 서비스 재신청 필요\n\n"
+            "수동 조회: https://nedrug.mfds.go.kr/pbp/CCBGA01/getItem"
         )
     if res.status_code == 404:
-        raise RuntimeError(f"식약처 API 오퍼레이션 '{op}' 를 찾을 수 없습니다(404).")
+        raise RuntimeError(
+            f"식약처 API 오퍼레이션 '{op}'를 찾을 수 없습니다(404).\n"
+            "현재 승인된 서비스 엔드포인트를 포털에서 확인하세요."
+        )
     res.raise_for_status()
     try:
         data = res.json()
