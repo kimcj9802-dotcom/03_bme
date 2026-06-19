@@ -198,7 +198,7 @@ RECALL_SYSTEM_PROMPT = (
 # ── 식약처 회수·판매중지 API (IROS_16 v1.1 기준) ────────────────────
 # 참고문서: 오퍼레이션명은 getItemNameList / getSerialNumList 등
 # 주의: 서비스명에 숫자 1 포함(소문자 l 아님). 파라미터는 serviceKey (소문자 s)
-MFDS_API_KEY  = "676b69cc8ef1404d6caaf718caf7ce1e58eb9ba9b9621cf6846af395fb72c50a"
+MFDS_API_KEY  = "eaad6ea491883716829e3fd95f21430eb2a5ee5500f6ab79e77a004cba388944"
 MFDS_API_BASE = "https://apis.data.go.kr/1471000/MdlpRtrv1S1eStpgeInfoService02"
 
 # ── getItemNameList 응답 필드 (문서 기준) ──────────────────────────────
@@ -870,5 +870,6 @@ async def debug_retrieve(req: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+
 
 
