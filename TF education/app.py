@@ -276,7 +276,7 @@ def _score_asset_vs_recall(asset: dict, recall: dict,
                             serial_hit_set: set[str] | None = None) -> tuple[int, list[str]]:
     """자산 1건 vs 회수 항목 1건 → (점수, 근거 목록).
     점수 체계:
-      제조번호 일치   = +100 (최우선 — serial_hit_set 또는 recall의 SERIAL_NUM 직접 비교)
+      제조번호 일치   = +100 (최우선 — serial_hit_set 또는 recall의 MAKE_NO 직접 비교)
       품목명 유사도   =  0~50
       분류명 유사도   =  0~20  (MEA_CLASS_NAME)
       합산 최대 170점, 높은 가능성: ≥70, 검토 필요: 30~69
@@ -285,7 +285,7 @@ def _score_asset_vs_recall(asset: dict, recall: dict,
 
     # 1) 제조번호 일치 (최우선 100점)
     a_serial = re.sub(r"\s+", "", str(asset.get("제조번호", ""))).lower()
-    r_serial  = re.sub(r"\s+", "", str(recall.get("SERIAL_NUM", ""))).lower()
+    r_serial  = re.sub(r"\s+", "", str(recall.get("MAKE_NO", ""))).lower()
     serial_match = False
     if a_serial:
         if (r_serial and a_serial == r_serial):
@@ -625,7 +625,7 @@ async def mfds_match(file: UploadFile = File(...)):
             async with httpx.AsyncClient(timeout=30.0) as client:
                 for serial in unique_serials:
                     body = await _mfds_call(client, "getSerialNumList01",
-                                            extra={"serial_num": serial}, rows=10)
+                                            extra={"make_no": serial}, rows=10)
                     its = body.get("items", [])
                     if isinstance(its, dict):
                         its = [its]
