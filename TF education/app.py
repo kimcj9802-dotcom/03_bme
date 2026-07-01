@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, UploadFile, File, Form
+﻿from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -8,6 +8,14 @@ import difflib
 import httpx
 import json
 import numpy as np
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("app")
 
 try:
     import openpyxl as _openpyxl
@@ -218,7 +226,10 @@ async def _mfds_call(client: httpx.AsyncClient, op: str, extra: dict | None = No
         for k, v in extra.items():
             qs += f"&{k}={v}"
     url = f"{MFDS_API_BASE}/{op}?{qs}"
+    logger.debug("▶ MFDS 요청: %s", url.replace(MFDS_API_KEY, "***KEY***"))
     res = await client.get(url)
+    logger.debug("◀ MFDS 응답: HTTP %s | %d bytes | %s",
+                 res.status_code, len(res.content), res.text[:300])
     if not res.is_success:
         raise RuntimeError(f"[HTTP {res.status_code}] {res.text}")
     try:
@@ -562,6 +573,7 @@ async def recall_check(req: RecallCheckRequest):
 @app.get("/api/mfds/recall-list")
 async def mfds_recall_list():
     """식약처 getItemNameList 전체 조회."""
+    logger.info("==== /api/mfds/recall-list 호출 ====")
     try:
         items, total_count = await _mfds_all_pages("getItemNameList01")
         # REPORT_SUBMIT_DATE 내림차순 정렬
@@ -574,42 +586,46 @@ async def mfds_recall_list():
 # ── 병원 자산 엑셀 업로드 + 회수 매칭 분석 ──────────────────────────
 @app.post("/api/mfds/match")
 async def mfds_match(file: UploadFile = File(...)):
-    """엑셀 자산 파일 업로드 → 식약처 API 매칭 분석.
-    전략:
-      1) getItemNameList (필터 없음) → 전체 회수 품목
-      2) 각 자산의 제조번호로 getSerialNumList 조회 → 제조번호 히트셋 구성
-      3) 점수 계산: 제조번호 일치=100, 품목명 유사도×50, 분류명 유사도×20
-    """
+    """엑셀 자산 파일 업로드 → 식약처 API 매칭 분석."""
+    logger.info("==== /api/mfds/match 호출 | 파일명: %s ====", file.filename)
+
     # 1. 엑셀 파싱
     try:
         xlsx_bytes = await file.read()
         assets = _parse_excel_assets(xlsx_bytes)
     except RuntimeError as e:
+        logger.error("엑셀 파싱 실패: %s", e)
         return {"ok": False, "error": str(e)}
     except Exception as e:
+        logger.error("엑셀 파싱 예외: %s", e)
         return {"ok": False, "error": f"엑셀 파싱 오류: {e}"}
 
+    logger.info("엑셀 파싱 완료: 자산 %d건", len(assets))
     if not assets:
         return {"ok": False, "error": "엑셀에서 자산 데이터를 읽을 수 없습니다."}
 
     # 2a. 식약처 getItemNameList 전체 조회
+    logger.info("식약처 getItemNameList01 조회 시작")
     try:
         recall_items, total_recall = await _mfds_all_pages("getItemNameList01")
+        logger.info("getItemNameList01 완료: 전체 %d건 중 %d건 수신", total_recall, len(recall_items))
     except Exception as e:
+        logger.error("getItemNameList01 오류: %s", e)
         return {"ok": False, "error": f"식약처 API 오류: {e}"}
 
     # 2b. 제조번호 히트셋 구성
-    # 자산 중 제조번호가 있는 것들만 getSerialNumList로 추가 조회
-    serial_hit: set[str] = set()   # 매칭된 제조번호 (lower-case, 공백 제거)
+    serial_hit: set[str] = set()
     unique_serials = {
         re.sub(r"\s+", "", str(a.get("제조번호", ""))).lower()
         for a in assets
         if str(a.get("제조번호", "")).strip()
     }
+    logger.info("제조번호 조회 대상: %d건 %s", len(unique_serials), list(unique_serials)[:5])
     if unique_serials:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 for serial in unique_serials:
+                    logger.debug("getSerialNumList01 조회: make_no=%s", serial)
                     body = await _mfds_call(client, "getSerialNumList01",
                                             extra={"make_no": serial}, rows=10)
                     its = body.get("items", [])
@@ -617,8 +633,10 @@ async def mfds_match(file: UploadFile = File(...)):
                         its = [its]
                     if its:
                         serial_hit.add(serial)
-        except Exception:
-            pass   # 제조번호 조회 실패 시 무시 (점수에서만 반영 안 됨)
+                        logger.info("제조번호 히트: %s", serial)
+        except Exception as e:
+            logger.warning("getSerialNumList01 오류 (무시): %s", e)
+    logger.info("제조번호 히트셋: %s", serial_hit)
 
     # REPORT_SUBMIT_DATE 내림차순 정렬
     recall_items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
