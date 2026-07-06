@@ -295,52 +295,56 @@ def _sim(a: str, b: str) -> float:
     b = re.sub(r"\s+", " ", str(b or "")).strip().lower()
     if not a or not b:
         return 0.0
-    # 단어 집합 Jaccard (SequenceMatcher 대비 10배 빠름)
     sa, sb = set(a.split()), set(b.split())
-    if sa and sb:
+    # 양쪽 모두 2단어 이상이고 교집합이 있으면 Jaccard (빠름)
+    if len(sa) > 1 and len(sb) > 1:
         inter = len(sa & sb)
-        if inter == 0:
-            return 0.0
-        return inter / len(sa | sb)
-    # 단어 분리 불가(한 글자 등) → 문자 단위 SequenceMatcher
+        if inter > 0:
+            return inter / len(sa | sb)
+    # 단어 분리 불가(단일어, 업체명 등) → 문자 단위 SequenceMatcher
     return difflib.SequenceMatcher(None, a, b).ratio()
 
 def _score_asset_vs_recall(asset: dict, recall: dict,
                             serial_hit_set: set[str] | None = None) -> tuple[int, list[str]]:
-    """자산 1건 vs 회수 항목 1건 → (점수, 근거 목록).
-    점수 체계:
-      제조번호 일치   = +100 (최우선 — serial_hit_set 또는 recall의 MAKE_NO 직접 비교)
-      품목명 유사도   =  0~50
-      분류명 유사도   =  0~20  (MEA_CLASS_NAME)
-      합산 최대 170점, 높은 가능성: ≥70, 검토 필요: 30~69
+    """자산 1건 vs 회수 항목 1건 → (점수/100, 근거 목록).
+    점수 체계 (합계 최대 100점):
+      제조번호 일치   = +40  (회수 시리얼 set 조회)
+      업체명 유사도   =  0~20 (제조사/공급사 vs ENTP_NAME)
+      품목명 유사도   =  0~30 (한글명칭 vs ITEM_NAME)
+      분류명 유사도   =  0~10 (한글명칭 vs MEA_CLASS_NAME)
+    기준: ≥70 = 높은 가능성, 30~69 = 검토 필요
     """
     score, reasons = 0, []
 
-    # 1) 제조번호 일치 (최우선 100점)
+    # 1) 제조번호 일치 (+40)
     a_serial = re.sub(r"\s+", "", str(asset.get("제조번호", ""))).lower()
-    r_serial  = re.sub(r"\s+", "", str(recall.get("MAKE_NO", ""))).lower()
-    serial_match = False
-    if a_serial:
-        if (r_serial and a_serial == r_serial):
-            serial_match = True
-        elif serial_hit_set and a_serial in serial_hit_set:
-            serial_match = True
-    if serial_match:
-        score += 100
+    if a_serial and serial_hit_set and a_serial in serial_hit_set:
+        score += 40
         reasons.append(f"제조번호 일치 ({asset.get('제조번호','')})")
 
-    # 2) 품목명 유사도 (0-50점) — ITEM_NAME vs 한글명칭
+    # 2) 업체명 유사도 (0~20) — 제조사·공급사 중 더 높은 쪽
+    r_company = recall.get("ENTP_NAME", "")
+    comp_sim  = max(
+        _sim(str(asset.get("제조사", "") or ""), r_company),
+        _sim(str(asset.get("공급사", "") or ""), r_company),
+    )
+    cs = int(comp_sim * 20)
+    if cs >= 2:
+        score += cs
+        reasons.append(f"업체명 유사도 {int(comp_sim*100)}%")
+
+    # 3) 품목명 유사도 (0~30) — 한글명칭 vs ITEM_NAME
     nr = _sim(asset.get("한글명칭", ""), recall.get("ITEM_NAME", ""))
-    ns = int(nr * 50)
-    if ns >= 5:
+    ns = int(nr * 30)
+    if ns >= 3:
         score += ns
         reasons.append(f"품목명 유사도 {int(nr*100)}%")
 
-    # 3) 분류명 유사도 (0-20점) — MEA_CLASS_NAME vs 한글명칭(보조)
+    # 4) 분류명 유사도 (0~10) — 한글명칭 vs MEA_CLASS_NAME
     cr = _sim(asset.get("한글명칭", ""), recall.get("MEA_CLASS_NAME", ""))
-    cs = int(cr * 20)
-    if cs >= 5:
-        score += cs
+    crs = int(cr * 10)
+    if crs >= 2:
+        score += crs
         reasons.append(f"분류명 유사도 {int(cr*100)}%")
 
     return score, reasons
@@ -887,13 +891,14 @@ async def mfds_match(file: UploadFile = File(...)):
             "취득일자":     asset.get("취득일자", ""),
             "제조사":       asset.get("제조사", ""),
             "공급사":       asset.get("공급사", ""),
+            "회수업체명":   best_recall.get("ENTP_NAME", ""),
             "회수품목명":   best_recall.get("ITEM_NAME", ""),
             "회수분류명":   best_recall.get("MEA_CLASS_NAME", ""),
             "부서접수번호": best_recall.get("DEPT_RECEIPT_NO", ""),
             "회수보고구분": best_recall.get("REPORT_KIND_NAME", ""),
             "보고상태":     best_recall.get("REPORT_STATE_NAME", ""),
             "보고일자":     best_recall.get("REPORT_SUBMIT_DATE", ""),
-            "점수":         best_score,
+            "점수(100점)":  best_score,
             "근거":         " / ".join(best_reasons),
         }
         if best_score >= HIGH_THRESHOLD:

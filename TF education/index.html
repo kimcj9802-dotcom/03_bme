@@ -423,10 +423,11 @@
               <th>모델명</th>
               <th>제조번호</th>
               <th>관리부서</th>
+              <th>회수업체명</th>
               <th>회수품목명</th>
               <th>회수이유</th>
               <th>보고일자</th>
-              <th>점수</th>
+              <th>점수/100</th>
               <th>매칭 근거</th>
             </tr>
           </thead>
@@ -1032,7 +1033,7 @@
     }
     noResult.style.display = "none";
 
-    const scoreColor = (s) => s >= 100 ? "#c0392b" : s >= 70 ? "#e04000" : "#e08000";
+    const scoreColor = (s) => s >= 70 ? "#c0392b" : s >= 30 ? "#e07000" : "#888888";
     const fmtDate = (d) => {
       if (!d) return "—";
       const s = String(d).replace(/\D/g, "");
@@ -1040,7 +1041,7 @@
     };
 
     tbody.innerHTML = rows.map(r => {
-      const sc = r["점수"] || 0;
+      const sc = r["점수(100점)"] || 0;
       const pct = Math.min(sc, 100);
       const col = scoreColor(sc);
       return `<tr>
@@ -1049,12 +1050,13 @@
         <td>${r["모델명"] || "—"}</td>
         <td>${r["제조번호"] || "—"}</td>
         <td>${r["관리부서명"] || "—"}</td>
+        <td style="font-size:.78rem;">${r["회수업체명"] || "—"}</td>
         <td style="color:#c0392b;font-weight:700;">${r["회수품목명"] || "—"}<br><span style="font-size:.7rem;color:#999;">${r["회수분류명"] || ""}</span></td>
         <td style="font-size:.74rem;">${r["회수보고구분"] || "—"} / ${r["보고상태"] || "—"}</td>
         <td style="white-space:nowrap;">${fmtDate(r["보고일자"])}</td>
         <td style="white-space:nowrap;">
           <span class="score-bar"><span class="score-fill" style="width:${pct}%;background:${col};"></span></span>
-          <strong style="color:${col};">${sc}</strong>
+          <strong style="color:${col};">${sc}/100</strong>
         </td>
         <td style="font-size:.74rem;color:#555;">${r["근거"] || "—"}</td>
       </tr>`;
