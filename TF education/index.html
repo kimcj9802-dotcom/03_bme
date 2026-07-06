@@ -314,14 +314,34 @@
             <option value="전체">전체</option>
             <option value="진행중">진행중</option>
             <option value="종료">종료</option>
-            <option value="보고완료">보고완료</option>
-            <option value="연장승인">연장승인</option>
           </select>
         </div>
       </div>
 
-      <button id="recall-fetch-btn" onclick="fetchRecallList()">🔄 회수 목록 가져오기</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button id="recall-fetch-btn" onclick="fetchRecallList()">🔄 회수 목록 가져오기</button>
+        <button id="recall-view-btn" onclick="toggleRecallListView()" style="display:none;background:#4a7c6f;">📋 회수목록 확인</button>
+      </div>
       <div class="recall-fetch-status" id="recall-fetch-status"></div>
+
+      <!-- 회수목록 확인 테이블 -->
+      <div id="recall-list-view" style="display:none;margin-top:12px;">
+        <div id="recall-list-header" style="font-size:.83rem;color:#555;margin-bottom:6px;"></div>
+        <div style="max-height:420px;overflow-y:auto;border:1px solid #ddd;border-radius:6px;">
+          <table style="width:100%;border-collapse:collapse;font-size:.81rem;">
+            <thead>
+              <tr style="background:#f5f7f5;position:sticky;top:0;z-index:1;">
+                <th style="padding:7px 8px;text-align:center;border-bottom:1px solid #ddd;width:40px;">#</th>
+                <th style="padding:7px 8px;text-align:left;border-bottom:1px solid #ddd;">품목명</th>
+                <th style="padding:7px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;width:90px;">보고일자</th>
+                <th style="padding:7px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;width:75px;">상태</th>
+                <th style="padding:7px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;width:105px;">회수종류</th>
+              </tr>
+            </thead>
+            <tbody id="recall-list-body"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- ② 병원 자산 업로드 -->
@@ -730,6 +750,45 @@
     }
   }
 
+  // ── 리콜: 회수목록 캐시 ──────────────────────────────────────────────
+  let recallListData = [];
+
+  function toggleRecallListView() {
+    const view = document.getElementById("recall-list-view");
+    const btn  = document.getElementById("recall-view-btn");
+    const open = view.style.display !== "none";
+    if (open) {
+      view.style.display = "none";
+      btn.textContent = "📋 회수목록 확인";
+    } else {
+      renderRecallListTable();
+      view.style.display = "block";
+      btn.textContent = "📋 목록 닫기";
+    }
+  }
+
+  function renderRecallListTable() {
+    const body   = document.getElementById("recall-list-body");
+    const header = document.getElementById("recall-list-header");
+    header.textContent = `조회된 목록 총 ${recallListData.length.toLocaleString()}건`;
+    const stateColor = { "승인": "#1a6b3a", "반려": "#c0392b", "보고완료": "#2563a8", "연장요청": "#a07800" };
+    body.innerHTML = recallListData.map((item, i) => {
+      const raw  = item.REPORT_SUBMIT_DATE || "";
+      const date = raw.length >= 8
+        ? `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`
+        : "-";
+      const state = item.REPORT_STATE_NAME || "-";
+      const color = stateColor[state] || "#555";
+      return `<tr style="border-bottom:1px solid #f0f0f0;">
+        <td style="padding:5px 8px;text-align:center;color:#aaa;">${i + 1}</td>
+        <td style="padding:5px 8px;">${item.ITEM_NAME || "-"}</td>
+        <td style="padding:5px 8px;text-align:center;">${date}</td>
+        <td style="padding:5px 8px;text-align:center;color:${color};font-weight:500;">${state}</td>
+        <td style="padding:5px 8px;text-align:center;">${item.REPORT_KIND_NAME || "-"}</td>
+      </tr>`;
+    }).join("");
+  }
+
   // ── 리콜: 식약처 회수 목록 조회 ────────────────────────────────────
   async function fetchRecallList() {
     if (!isAdmin) { openAdminModal(); return; }
@@ -760,6 +819,14 @@
           + (filterDesc ? `<span style="color:#666;margin-left:8px;">(${filterDesc})</span>` : "")
           + `<br><span style="font-size:.8rem;color:#1a6b3a;">📌 캐시 저장됨 — 매칭 시 재조회 없이 즉시 사용됩니다.</span>`;
         st.style.color = "#1a6b3a";
+        // 회수목록 데이터 저장 + 확인 버튼 노출
+        recallListData = data.items || [];
+        const viewBtn = document.getElementById("recall-view-btn");
+        viewBtn.style.display = "inline-block";
+        // 목록이 이미 열려 있으면 즉시 재렌더
+        if (document.getElementById("recall-list-view").style.display !== "none") {
+          renderRecallListTable();
+        }
       } else {
         st.textContent = `❌ ${data.error}`;
         st.style.color = "#c0392b";
