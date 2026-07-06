@@ -241,7 +241,7 @@ async def _mfds_call(client: httpx.AsyncClient, op: str, extra: dict | None = No
         if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in txt:
             raise RuntimeError("API 키가 등록되지 않았습니다. 공공데이터포털에서 활용신청을 완료하세요.")
         raise RuntimeError(f"응답 파싱 실패: {txt[:300]}")
-    return data.get("response", {}).get("body", {})
+    return data.get("body", {})
 
 async def _mfds_all_pages(op: str, extra: dict | None = None,
                           max_items: int = 3000, rows_per_page: int = 100) -> tuple[list[dict], int]:
@@ -256,9 +256,11 @@ async def _mfds_all_pages(op: str, extra: dict | None = None,
             if not items:
                 break
             total_count = int(body.get("totalCount", total_count) or 0)
-            # 필드명 소문자 통일
-            all_items.extend([{k.upper(): str(v or "").strip() for k, v in it.items()}
-                               for it in items])
+            # 각 요소는 {"item": {...}} 구조 → "item" 키로 실제 데이터 추출
+            all_items.extend([
+                {k.upper(): str(v or "").strip() for k, v in it.get("item", it).items()}
+                for it in items
+            ])
             if len(all_items) >= total_count or len(items) < rows_per_page:
                 break
             page += 1
