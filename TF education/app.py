@@ -206,8 +206,10 @@ RECALL_SYSTEM_PROMPT = (
 # ── 식약처 회수·판매중지 API (IROS_16 v1.1 기준) ────────────────────
 # 참고문서: 오퍼레이션명은 getItemNameList / getSerialNumList 등
 # 주의: 서비스명에 숫자 1 포함(소문자 l 아님). 파라미터는 serviceKey (소문자 s)
-MFDS_API_KEY  = "eaad6ea491883716829e3fd95f21430eb2a5ee5500f6ab79e77a004cba388944"
-MFDS_API_BASE = "https://apis.data.go.kr/1471000/MdlpRtrv1S1eStpgeInfoService02"
+MFDS_API_KEY  = "97ec72c17de0c92cdb0946f294aef4498c2bb6f6e0d56eaf3c5c35f727e60692"
+# [수정 2026-07-01] 경로명 오타 정정: Rtrv1S1e → RtrvlSle (l↔1 혼동). 이게 HTTP 500 "Unexpected errors"의 원인.
+# 데이터셋 15056785 '식약처_의료기기 회수·판매중지정보'. 오퍼레이션은 getItemNameList01/getSerialNumList01(이미 정확).
+MFDS_API_BASE = "https://apis.data.go.kr/1471000/MdlpRtrvlSleStpgeInfoService02"
 
 # ── getItemNameList 응답 필드 (문서 기준) ──────────────────────────────
 # ITEM_NAME, RECALL_ITEM_SEQ, DEPT_RECEIPT_NO,
@@ -874,6 +876,7 @@ async def debug_retrieve(req: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+
 
 
 
