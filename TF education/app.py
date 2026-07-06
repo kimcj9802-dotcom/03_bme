@@ -248,7 +248,7 @@ async def _mfds_call(client: httpx.AsyncClient, op: str, extra: dict | None = No
     return data.get("body", {})
 
 async def _mfds_all_pages(op: str, extra: dict | None = None,
-                          max_items: int = 3000, rows_per_page: int = 100) -> tuple[list[dict], int]:
+                          max_items: int = 99999, rows_per_page: int = 100) -> tuple[list[dict], int]:
     """식약처 API 전체 페이지 순회 조회. (items 목록, totalCount) 반환."""
     all_items, page, total_count = [], 1, 0
     async with httpx.AsyncClient(timeout=30.0) as client:
