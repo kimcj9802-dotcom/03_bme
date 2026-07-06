@@ -762,46 +762,69 @@ async def mfds_match(file: UploadFile = File(...)):
             logger.error("getItemNameList01 오류: %s", e)
             return {"ok": False, "error": f"식약처 API 오류: {e}"}
 
-    # 2b. 제조번호 히트셋 구성
+    # 2b. 제조번호 히트셋 구성 — 병렬 조회로 속도 개선
     serial_hit: set[str] = set()
     unique_serials = {
         re.sub(r"\s+", "", str(a.get("제조번호", ""))).lower()
         for a in assets
         if str(a.get("제조번호", "")).strip()
     }
-    logger.info("제조번호 조회 대상: %d건 %s", len(unique_serials), list(unique_serials)[:5])
+    logger.info("제조번호 조회 대상: %d건", len(unique_serials))
     if unique_serials:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                for serial in unique_serials:
-                    logger.debug("getSerialNumList01 조회: make_no=%s", serial)
+            sem = asyncio.Semaphore(10)  # 동시 요청 최대 10개
+            async def _check_serial(client: httpx.AsyncClient, serial: str) -> str | None:
+                async with sem:
                     body = await _mfds_call(client, "getSerialNumList01",
-                                            extra={"make_no": serial}, rows=10)
+                                            extra={"make_no": serial}, rows=3)
                     its = body.get("items", [])
                     if isinstance(its, dict):
                         its = [its]
-                    if its:
-                        serial_hit.add(serial)
-                        logger.info("제조번호 히트: %s", serial)
+                    return serial if its else None
+
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                results = await asyncio.gather(
+                    *[_check_serial(client, s) for s in unique_serials],
+                    return_exceptions=True,
+                )
+            serial_hit = {r for r in results if isinstance(r, str)}
+            logger.info("제조번호 히트셋: %s", serial_hit)
         except Exception as e:
             logger.warning("getSerialNumList01 오류 (무시): %s", e)
-    logger.info("제조번호 히트셋: %s", serial_hit)
 
     # REPORT_SUBMIT_DATE 내림차순 정렬
     recall_items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
 
-    # 3. 자산 × 회수 항목 매칭 (자산당 최고 점수 회수 항목 1건)
+    # 3. 자산 × 회수 항목 매칭
     HIGH_THRESHOLD   = 70
     REVIEW_THRESHOLD = 30
+
+    # 회수 품목을 사전 토큰화 — 공백 분리 단어 집합으로 사전 필터링용
+    def _tok(text: str) -> set[str]:
+        return set(re.sub(r"\s+", " ", str(text or "")).strip().lower().split())
+
+    recall_tokens = [
+        _tok(r.get("ITEM_NAME", "") + " " + r.get("MEA_CLASS_NAME", ""))
+        for r in recall_items
+    ]
 
     high_list, review_list = [], []
 
     for asset in assets:
+        asset_tok = _tok(asset.get("한글명칭", ""))
+        # 단어 교집합이 1개 이상인 후보만 비교 → O(n×m) → O(n×k), k≪m
+        if asset_tok:
+            candidates = [i for i, rt in enumerate(recall_tokens) if asset_tok & rt]
+            if not candidates:          # 교집합 없으면 전체 비교 (fallback)
+                candidates = range(len(recall_items))
+        else:
+            candidates = range(len(recall_items))
+
         best_score, best_recall, best_reasons = 0, None, []
-        for recall in recall_items:
-            sc, rsn = _score_asset_vs_recall(asset, recall, serial_hit)
+        for i in candidates:
+            sc, rsn = _score_asset_vs_recall(asset, recall_items[i], serial_hit)
             if sc > best_score:
-                best_score, best_recall, best_reasons = sc, recall, rsn
+                best_score, best_recall, best_reasons = sc, recall_items[i], rsn
 
         if best_score < REVIEW_THRESHOLD or best_recall is None:
             continue
