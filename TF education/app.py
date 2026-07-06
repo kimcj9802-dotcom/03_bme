@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import re
 import io
 import math
+import asyncio
 import difflib
 import httpx
 import json
@@ -608,15 +609,30 @@ async def mfds_recall_list(
     logger.info("==== /api/mfds/recall-list | date_from=%s date_to=%s status=%s ====",
                 date_from, date_to, status)
     try:
-        items, total_count = await _mfds_all_pages("getItemNameList01")
+        # 회수 품목 목록 + 업체 목록 병렬 조회
+        (items, total_count), (co_items, _) = await asyncio.gather(
+            _mfds_all_pages("getItemNameList01"),
+            _mfds_all_pages("getCompanyNameList01"),
+        )
+
+        # 업체명 룩업: (MEDDEV_ENTP_SEQ, REPORT_SUBMIT_DATE) → ENTP_NAME
+        co_lookup: dict[tuple, str] = {
+            (c.get("MEDDEV_ENTP_SEQ", ""), c.get("REPORT_SUBMIT_DATE", "")): c.get("ENTP_NAME", "")
+            for c in co_items
+        }
+        for item in items:
+            key = (item.get("MEDDEV_ENTP_SEQ", ""), item.get("REPORT_SUBMIT_DATE", ""))
+            item["ENTP_NAME"] = co_lookup.get(key, "")
 
         # 클라이언트 사이드 필터
         if date_from:
             items = [i for i in items if i.get("REPORT_SUBMIT_DATE", "")[:8] >= date_from]
         if date_to:
             items = [i for i in items if i.get("REPORT_SUBMIT_DATE", "")[:8] <= date_to]
-        if status != "전체":
-            items = [i for i in items if i.get("REPORT_STATE_NAME", "") == status]
+        if status == "진행중":
+            items = [i for i in items if i.get("RECALL_REPORT_NAME", "") == "계획보고"]
+        elif status == "종료":
+            items = [i for i in items if i.get("RECALL_REPORT_NAME", "") == "종료보고"]
 
         items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
 
@@ -632,6 +648,18 @@ async def mfds_recall_list(
     except Exception as e:
         logger.error("recall-list 오류: %s", e)
         return {"ok": False, "error": str(e)}
+
+
+# ── 회수 항목 상세조회 (캐시에서 즉시 반환) ──────────────────────────
+@app.get("/api/mfds/recall-detail")
+async def mfds_recall_detail(dept_no: str = ""):
+    """캐시된 회수 목록에서 DEPT_RECEIPT_NO로 상세 정보 반환."""
+    if not dept_no:
+        return {"ok": False, "error": "dept_no 파라미터 필요"}
+    item = next((i for i in _recall_cache if i.get("DEPT_RECEIPT_NO") == dept_no), None)
+    if not item:
+        return {"ok": False, "error": "해당 항목을 캐시에서 찾을 수 없습니다."}
+    return {"ok": True, "item": item}
 
 
 # ── 병원 자산 엑셀 업로드 + 회수 매칭 분석 ──────────────────────────
