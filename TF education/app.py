@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import re
 import io
+import math
 import difflib
 import httpx
 import json
@@ -248,26 +249,44 @@ async def _mfds_call(client: httpx.AsyncClient, op: str, extra: dict | None = No
     return data.get("body", {})
 
 async def _mfds_all_pages(op: str, extra: dict | None = None,
-                          max_items: int = 99999, rows_per_page: int = 100) -> tuple[list[dict], int]:
-    """식약처 API 전체 페이지 순회 조회. (items 목록, totalCount) 반환."""
-    all_items, page, total_count = [], 1, 0
+                          max_items: int = 3000, rows_per_page: int = 100) -> tuple[list[dict], int]:
+    """식약처 API 최신 max_items건 조회.
+    1페이지로 totalCount를 파악한 뒤, 마지막 페이지부터 역산해
+    가장 최신 데이터가 담긴 페이지부터 순차 조회한다.
+    """
+    def _parse(body: dict) -> list[dict]:
+        raw = body.get("items", [])
+        if isinstance(raw, dict):
+            raw = [raw]
+        return [{k.upper(): str(v or "").strip() for k, v in it.get("item", it).items()} for it in raw]
+
     async with httpx.AsyncClient(timeout=30.0) as client:
-        while len(all_items) < max_items:
-            body  = await _mfds_call(client, op, extra, page, rows_per_page)
-            items = body.get("items", [])
-            if isinstance(items, dict):          # 단건이면 리스트로 변환
-                items = [items]
+        # ① 1페이지로 totalCount 파악
+        first_body   = await _mfds_call(client, op, extra, 1, rows_per_page)
+        total_count  = int(first_body.get("totalCount", 0) or 0)
+        if total_count == 0:
+            return [], 0
+
+        # ② 최신 max_items건을 포함하는 시작 페이지 계산
+        # +1: 마지막 페이지가 rows_per_page 미만일 수 있으므로 한 페이지 여유를 둠
+        total_pages  = math.ceil(total_count / rows_per_page)
+        pages_needed = math.ceil(min(max_items, total_count) / rows_per_page) + 1
+        start_page   = max(1, total_pages - pages_needed + 1)
+        logger.debug("totalCount=%d totalPages=%d startPage=%d", total_count, total_pages, start_page)
+
+        # ③ start_page ~ 마지막 페이지 순차 조회 (1페이지는 이미 수신했으면 재사용)
+        all_items: list[dict] = []
+        for page in range(start_page, total_pages + 1):
+            body  = first_body if page == 1 else await _mfds_call(client, op, extra, page, rows_per_page)
+            items = _parse(body)
             if not items:
                 break
-            total_count = int(body.get("totalCount", total_count) or 0)
-            # 각 요소는 {"item": {...}} 구조 → "item" 키로 실제 데이터 추출
-            all_items.extend([
-                {k.upper(): str(v or "").strip() for k, v in it.get("item", it).items()}
-                for it in items
-            ])
-            if len(all_items) >= total_count or len(items) < rows_per_page:
-                break
-            page += 1
+            all_items.extend(items)
+
+    # ④ 페이지 경계로 인해 max_items 초과 시 가장 최신(뒤쪽)만 유지
+    if len(all_items) > max_items:
+        all_items = all_items[-max_items:]
+
     return all_items, total_count
 
 def _sim(a: str, b: str) -> float:
