@@ -206,6 +206,10 @@ RECALL_SYSTEM_PROMPT = (
 # ── 식약처 회수·판매중지 API (IROS_16 v1.1 기준) ────────────────────
 # 참고문서: 오퍼레이션명은 getItemNameList / getSerialNumList 등
 # 주의: 서비스명에 숫자 1 포함(소문자 l 아님). 파라미터는 serviceKey (소문자 s)
+
+# 조회된 회수 목록 메모리 캐시 (매칭 시 재조회 생략)
+_recall_cache: list[dict] = []
+_recall_cache_meta: dict  = {}   # {"total_count": n, "fetched": n, "filters": {...}}
 MFDS_API_KEY  = "97ec72c17de0c92cdb0946f294aef4498c2bb6f6e0d56eaf3c5c35f727e60692"
 # [수정 2026-07-01] 경로명 오타 정정: Rtrv1S1e → RtrvlSle (l↔1 혼동). 이게 HTTP 500 "Unexpected errors"의 원인.
 # 데이터셋 15056785 '식약처_의료기기 회수·판매중지정보'. 오퍼레이션은 getItemNameList01/getSerialNumList01(이미 정확).
@@ -575,15 +579,39 @@ async def recall_check(req: RecallCheckRequest):
 
 # ── 식약처 회수 목록 조회 ─────────────────────────────────────────────
 @app.get("/api/mfds/recall-list")
-async def mfds_recall_list():
-    """식약처 getItemNameList 전체 조회."""
-    logger.info("==== /api/mfds/recall-list 호출 ====")
+async def mfds_recall_list(
+    date_from: str = "",   # YYYYMMDD — 보고일자 시작
+    date_to:   str = "",   # YYYYMMDD — 보고일자 종료
+    status:    str = "전체"  # 전체 / 진행중 / 종료
+):
+    """식약처 getItemNameList 전체 조회 + 필터 + 캐시 저장."""
+    global _recall_cache, _recall_cache_meta
+    logger.info("==== /api/mfds/recall-list | date_from=%s date_to=%s status=%s ====",
+                date_from, date_to, status)
     try:
         items, total_count = await _mfds_all_pages("getItemNameList01")
-        # REPORT_SUBMIT_DATE 내림차순 정렬
+
+        # 클라이언트 사이드 필터
+        if date_from:
+            items = [i for i in items if i.get("REPORT_SUBMIT_DATE", "")[:8] >= date_from]
+        if date_to:
+            items = [i for i in items if i.get("REPORT_SUBMIT_DATE", "")[:8] <= date_to]
+        if status != "전체":
+            items = [i for i in items if i.get("REPORT_STATE_NAME", "") == status]
+
         items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
+
+        # 캐시 저장
+        _recall_cache = items
+        _recall_cache_meta = {
+            "total_count": total_count,
+            "fetched": len(items),
+            "filters": {"date_from": date_from, "date_to": date_to, "status": status},
+        }
+        logger.info("캐시 저장 완료: %d건", len(items))
         return {"ok": True, "total_count": total_count, "fetched": len(items), "items": items}
     except Exception as e:
+        logger.error("recall-list 오류: %s", e)
         return {"ok": False, "error": str(e)}
 
 
@@ -608,14 +636,20 @@ async def mfds_match(file: UploadFile = File(...)):
     if not assets:
         return {"ok": False, "error": "엑셀에서 자산 데이터를 읽을 수 없습니다."}
 
-    # 2a. 식약처 getItemNameList 전체 조회
-    logger.info("식약처 getItemNameList01 조회 시작")
-    try:
-        recall_items, total_recall = await _mfds_all_pages("getItemNameList01")
-        logger.info("getItemNameList01 완료: 전체 %d건 중 %d건 수신", total_recall, len(recall_items))
-    except Exception as e:
-        logger.error("getItemNameList01 오류: %s", e)
-        return {"ok": False, "error": f"식약처 API 오류: {e}"}
+    # 2a. 캐시 우선 사용 — 없으면 API 신규 조회
+    if _recall_cache:
+        recall_items = _recall_cache
+        total_recall = _recall_cache_meta.get("total_count", len(recall_items))
+        filters = _recall_cache_meta.get("filters", {})
+        logger.info("캐시 사용: %d건 (필터: %s)", len(recall_items), filters)
+    else:
+        logger.info("캐시 없음 — 식약처 getItemNameList01 신규 조회")
+        try:
+            recall_items, total_recall = await _mfds_all_pages("getItemNameList01")
+            logger.info("getItemNameList01 완료: 전체 %d건 중 %d건 수신", total_recall, len(recall_items))
+        except Exception as e:
+            logger.error("getItemNameList01 오류: %s", e)
+            return {"ok": False, "error": f"식약처 API 오류: {e}"}
 
     # 2b. 제조번호 히트셋 구성
     serial_hit: set[str] = set()
