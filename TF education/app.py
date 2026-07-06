@@ -588,6 +588,14 @@ async def mfds_recall_list(
     global _recall_cache, _recall_cache_meta
     logger.info("==== /api/mfds/recall-list | date_from=%s date_to=%s status=%s ====",
                 date_from, date_to, status)
+
+    # 식약처 API REPORT_STATE_NAME 실제값 → 화면 표시명 매핑
+    # API 응답: 보고완료 / 연장요청 / 연장승인 / 승인 / 반려 / 연장반려 / 작성중 / 수정요청
+    STATUS_MAP: dict[str, list[str]] = {
+        "진행중": ["연장요청"],                                   # 연장 신청 심사 대기 중
+        "종료":   ["승인", "반려", "연장승인", "연장반려"],        # 최종 처리 완료
+    }
+
     try:
         items, total_count = await _mfds_all_pages("getItemNameList01")
 
@@ -597,7 +605,9 @@ async def mfds_recall_list(
         if date_to:
             items = [i for i in items if i.get("REPORT_SUBMIT_DATE", "")[:8] <= date_to]
         if status != "전체":
-            items = [i for i in items if i.get("REPORT_STATE_NAME", "") == status]
+            allowed = STATUS_MAP.get(status, [status])
+            items = [i for i in items if i.get("REPORT_STATE_NAME", "") in allowed]
+            logger.info("status 필터 '%s' → API 상태값 %s → %d건", status, allowed, len(items))
 
         items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
 
