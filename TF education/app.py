@@ -295,6 +295,14 @@ def _sim(a: str, b: str) -> float:
     b = re.sub(r"\s+", " ", str(b or "")).strip().lower()
     if not a or not b:
         return 0.0
+    # 단어 집합 Jaccard (SequenceMatcher 대비 10배 빠름)
+    sa, sb = set(a.split()), set(b.split())
+    if sa and sb:
+        inter = len(sa & sb)
+        if inter == 0:
+            return 0.0
+        return inter / len(sa | sb)
+    # 단어 분리 불가(한 글자 등) → 문자 단위 SequenceMatcher
     return difflib.SequenceMatcher(None, a, b).ratio()
 
 def _score_asset_vs_recall(asset: dict, recall: dict,
@@ -662,6 +670,69 @@ async def mfds_recall_detail(dept_no: str = ""):
     return {"ok": True, "item": item}
 
 
+# ── 캐시된 회수 건 전체의 시리얼 set 구성 — 매칭용 ───────────────────
+async def _build_recall_serial_set(recall_items: list[dict]) -> set[str]:
+    """캐시된 회수 건들의 DEPT_RECEIPT_NO를 기준으로
+    getSerialNumList01을 이진탐색 1회 + 병렬 페이지 조회로 일괄 수집.
+    반환: 회수 대상 MAKE_NO(시리얼/LOT) 소문자 set.
+    """
+    dept_nos = {r.get("DEPT_RECEIPT_NO", "") for r in recall_items if r.get("DEPT_RECEIPT_NO")}
+    if not dept_nos:
+        return set()
+
+    min_dept = min(dept_nos)
+
+    def _parse(body: dict) -> list[dict]:
+        raw = body.get("items", [])
+        if isinstance(raw, dict):
+            raw = [raw]
+        return [{k.upper(): str(v or "").strip() for k, v in it.get("item", it).items()} for it in raw]
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # totalCount → lastPage 파악
+        first = await _mfds_call(client, "getSerialNumList01", None, 1, 100)
+        total = int(first.get("totalCount", 0) or 0)
+        if total == 0:
+            return set()
+        last_page = math.ceil(total / 100)
+
+        # min_dept 가 있는 페이지를 이진탐색으로 찾기
+        lo, hi, start_page = 1, last_page, last_page
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            body  = first if mid == 1 else await _mfds_call(client, "getSerialNumList01", None, mid, 100)
+            items = _parse(body)
+            if not items:
+                break
+            page_depts = [it.get("DEPT_RECEIPT_NO", "") for it in items]
+            if min_dept >= min(page_depts):
+                start_page = mid
+                hi = mid - 1
+            else:
+                lo = mid + 1
+
+        fetch_pages = list(range(max(1, start_page - 1), last_page + 1))
+        logger.info("시리얼 일괄조회: 페이지 %d~%d (%d페이지)", fetch_pages[0], last_page, len(fetch_pages))
+
+        # 최대 50페이지 병렬 조회 (초과 시 세마포어 제한)
+        sem50 = asyncio.Semaphore(50)
+        async def _fetch_page(p: int) -> dict:
+            async with sem50:
+                return await _mfds_call(client, "getSerialNumList01", None, p, 100)
+        bodies = await asyncio.gather(*[_fetch_page(p) for p in fetch_pages])
+
+    serial_set: set[str] = set()
+    for body in bodies:
+        for item in _parse(body):
+            if item.get("DEPT_RECEIPT_NO") in dept_nos:
+                make_no = re.sub(r"\s+", "", str(item.get("MAKE_NO", ""))).lower()
+                if make_no:
+                    serial_set.add(make_no)
+
+    logger.info("회수 시리얼셋 구성 완료: %d건", len(serial_set))
+    return serial_set
+
+
 # ── 제조번호(시리얼) 목록 조회 — 이진탐색으로 해당 페이지 특정 ────────
 async def _find_serial_records(dept_no: str) -> list[dict]:
     """getSerialNumList01을 이진탐색으로 탐색해 DEPT_RECEIPT_NO 매칭 레코드 반환."""
@@ -762,35 +833,12 @@ async def mfds_match(file: UploadFile = File(...)):
             logger.error("getItemNameList01 오류: %s", e)
             return {"ok": False, "error": f"식약처 API 오류: {e}"}
 
-    # 2b. 제조번호 히트셋 구성 — 병렬 조회로 속도 개선
-    serial_hit: set[str] = set()
-    unique_serials = {
-        re.sub(r"\s+", "", str(a.get("제조번호", ""))).lower()
-        for a in assets
-        if str(a.get("제조번호", "")).strip()
-    }
-    logger.info("제조번호 조회 대상: %d건", len(unique_serials))
-    if unique_serials:
-        try:
-            sem = asyncio.Semaphore(10)  # 동시 요청 최대 10개
-            async def _check_serial(client: httpx.AsyncClient, serial: str) -> str | None:
-                async with sem:
-                    body = await _mfds_call(client, "getSerialNumList01",
-                                            extra={"make_no": serial}, rows=3)
-                    its = body.get("items", [])
-                    if isinstance(its, dict):
-                        its = [its]
-                    return serial if its else None
-
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                results = await asyncio.gather(
-                    *[_check_serial(client, s) for s in unique_serials],
-                    return_exceptions=True,
-                )
-            serial_hit = {r for r in results if isinstance(r, str)}
-            logger.info("제조번호 히트셋: %s", serial_hit)
-        except Exception as e:
-            logger.warning("getSerialNumList01 오류 (무시): %s", e)
+    # 2b. 회수 건 전체 시리얼 set 일괄 구성 (자산별 API 호출 제거)
+    try:
+        serial_hit = await _build_recall_serial_set(recall_items)
+    except Exception as e:
+        logger.warning("시리얼 set 구성 오류 (무시): %s", e)
+        serial_hit = set()
 
     # REPORT_SUBMIT_DATE 내림차순 정렬
     recall_items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
