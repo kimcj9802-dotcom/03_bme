@@ -249,7 +249,7 @@ async def _mfds_call(client: httpx.AsyncClient, op: str, extra: dict | None = No
     return data.get("body", {})
 
 async def _mfds_all_pages(op: str, extra: dict | None = None,
-                          max_items: int = 3000, rows_per_page: int = 100) -> tuple[list[dict], int]:
+                          max_items: int = 1000, rows_per_page: int = 100) -> tuple[list[dict], int]:
     """식약처 API 최신 max_items건 조회.
     1페이지로 totalCount를 파악한 뒤, 마지막 페이지부터 역산해
     가장 최신 데이터가 담긴 페이지부터 순차 조회한다.
