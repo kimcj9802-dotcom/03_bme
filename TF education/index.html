@@ -824,36 +824,75 @@
     const modal = document.getElementById("recall-detail-modal");
     const body  = document.getElementById("recall-detail-body");
     modal.style.display = "flex";
-    body.innerHTML = "<span style='color:#888'>⏳ 조회 중…</span>";
+    body.innerHTML = "<span style='color:#888'>⏳ 기본 정보 조회 중…</span>";
     try {
-      const res  = await fetch(BE + "/api/mfds/recall-detail?dept_no=" + deptNoEncoded);
-      const data = await res.json();
-      if (!data.ok) { body.innerHTML = `<span style='color:#c0392b'>❌ ${data.error}</span>`; return; }
-      const it = data.item;
-      const rptName = it.RECALL_REPORT_NAME || "";
+      // 기본 정보 + 모델목록 병렬 조회
+      const [detailRes, serialRes] = await Promise.all([
+        fetch(BE + "/api/mfds/recall-detail?dept_no=" + deptNoEncoded),
+        fetch(BE + "/api/mfds/recall-serial?dept_no="  + deptNoEncoded),
+      ]);
+      const [detailData, serialData] = await Promise.all([detailRes.json(), serialRes.json()]);
+
+      if (!detailData.ok) { body.innerHTML = `<span style='color:#c0392b'>❌ ${detailData.error}</span>`; return; }
+      const it = detailData.item;
+      const rptName  = it.RECALL_REPORT_NAME || "";
       const progress = rptName === "계획보고" ? "진행중" : rptName === "종료보고" ? "종료" : rptName || "-";
-      const rows = [
-        ["업체명",     it.ENTP_NAME       || "-"],
-        ["품목명",     it.ITEM_NAME        || "-"],
-        ["품목분류",   it.MEA_CLASS_NAME   || "-"],
-        ["등급",       it.GRADE            || "-"],
-        ["보고일자",   (it.REPORT_SUBMIT_DATE||"").slice(0,8).replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3") || "-"],
-        ["진행여부",   progress],
-        ["보고상태",   it.REPORT_STATE_NAME || "-"],
-        ["회수종류",   it.REPORT_KIND_NAME  || "-"],
-        ["포장단위",   it.PACK_UNIT         || "-"],
-        ["회수기한",   it.VALID_TERM        || "-"],
-        ["사용목적",   it.EE_CONT           || "-"],
+
+      const infoRows = [
+        ["업체명",   it.ENTP_NAME        || "-"],
+        ["품목명",   it.ITEM_NAME         || "-"],
+        ["품목분류", it.MEA_CLASS_NAME    || "-"],
+        ["등급",     it.GRADE             || "-"],
+        ["보고일자", (it.REPORT_SUBMIT_DATE||"").slice(0,8).replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3") || "-"],
+        ["진행여부", progress],
+        ["보고상태", it.REPORT_STATE_NAME || "-"],
+        ["회수종류", it.REPORT_KIND_NAME  || "-"],
+        ["포장단위", it.PACK_UNIT         || "-"],
+        ["회수기한", it.VALID_TERM        || "-"],
+        ["사용목적", it.EE_CONT           || "-"],
       ];
-      body.innerHTML = rows.map(([label, val]) =>
+
+      let html = infoRows.map(([label, val]) =>
         `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #f0f0f0;">
           <span style="min-width:70px;color:#888;flex-shrink:0;">${label}</span>
           <span style="word-break:break-all;">${val}</span>
         </div>`
-      ).join("") +
-      `<div style="margin-top:10px;padding:8px;background:#fff8e1;border-radius:6px;font-size:.8rem;color:#a07800;">
-        ℹ️ 제조번호(시리얼) 정보는 식약처 API에서 2013년 이전 종료 건만 제공됩니다.
-      </div>`;
+      ).join("");
+
+      // 모델목록 테이블
+      if (serialData.ok && serialData.count > 0) {
+        const records = serialData.records;
+        html += `<div style="margin-top:14px;">
+          <div style="font-weight:600;margin-bottom:6px;font-size:.88rem;">📦 모델목록 (${records.length.toLocaleString()}건)</div>
+          <div style="max-height:260px;overflow:auto;border:1px solid #ddd;border-radius:6px;">
+            <table style="width:100%;border-collapse:collapse;font-size:.8rem;table-layout:fixed;min-width:340px;">
+              <colgroup><col style="width:110px;"><col style="width:110px;"><col style="width:70px;"><col style="width:70px;"></colgroup>
+              <thead>
+                <tr style="background:#f5f7f5;position:sticky;top:0;">
+                  <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">모델명</th>
+                  <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">제조번호(LOT)</th>
+                  <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">회수대상량</th>
+                  <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">재고량</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${records.map(r => `<tr style="border-bottom:1px solid #f5f5f5;">
+                  <td style="padding:4px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.TYPE_NAME||''}">${r.TYPE_NAME||"-"}</td>
+                  <td style="padding:4px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.MAKE_NO||''}">${r.MAKE_NO||"-"}</td>
+                  <td style="padding:4px 8px;text-align:center;">${r.RECALL_TARGET_QTY||"-"}</td>
+                  <td style="padding:4px 8px;text-align:center;">${r.STOCK_QTY||"-"}</td>
+                </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+      } else {
+        html += `<div style="margin-top:10px;padding:8px;background:#f5f5f5;border-radius:6px;font-size:.8rem;color:#888;">
+          ℹ️ 이 회수 건에 대한 모델목록 정보가 없습니다.
+        </div>`;
+      }
+
+      body.innerHTML = html;
     } catch(e) {
       body.innerHTML = `<span style='color:#c0392b'>❌ 네트워크 오류: ${e.message}</span>`;
     }

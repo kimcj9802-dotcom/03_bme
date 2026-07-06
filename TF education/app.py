@@ -662,6 +662,70 @@ async def mfds_recall_detail(dept_no: str = ""):
     return {"ok": True, "item": item}
 
 
+# ── 제조번호(시리얼) 목록 조회 — 이진탐색으로 해당 페이지 특정 ────────
+async def _find_serial_records(dept_no: str) -> list[dict]:
+    """getSerialNumList01을 이진탐색으로 탐색해 DEPT_RECEIPT_NO 매칭 레코드 반환."""
+    def _parse(body: dict) -> list[dict]:
+        raw = body.get("items", [])
+        if isinstance(raw, dict):
+            raw = [raw]
+        return [{k.upper(): str(v or "").strip() for k, v in it.get("item", it).items()} for it in raw]
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # totalCount → lastPage 파악
+        first_body  = await _mfds_call(client, "getSerialNumList01", None, 1, 100)
+        total_count = int(first_body.get("totalCount", 0) or 0)
+        if total_count == 0:
+            return []
+        last_page = math.ceil(total_count / 100)
+
+        # 이진탐색: DEPT_RECEIPT_NO 기준 정렬이므로 해당 페이지 범위를 빠르게 좁힘
+        lo, hi = 1, last_page
+        target_page = None
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            body  = first_body if mid == 1 else await _mfds_call(client, "getSerialNumList01", None, mid, 100)
+            items = _parse(body)
+            if not items:
+                break
+            dept_nos = [it.get("DEPT_RECEIPT_NO", "") for it in items]
+            min_d, max_d = min(dept_nos), max(dept_nos)
+
+            if dept_no in dept_nos or (min_d <= dept_no <= max_d):
+                target_page = mid
+                break
+            elif dept_no > max_d:
+                lo = mid + 1
+            else:
+                hi = mid - 1
+
+        if target_page is None:
+            return []
+
+        # target_page ± 1 범위를 병렬 조회해 전체 레코드 수집
+        pages_to_fetch = [p for p in range(target_page - 1, target_page + 2) if 1 <= p <= last_page]
+        tasks = [_mfds_call(client, "getSerialNumList01", None, p, 100) for p in pages_to_fetch]
+        bodies = await asyncio.gather(*tasks)
+
+        result = []
+        for body in bodies:
+            result.extend(it for it in _parse(body) if it.get("DEPT_RECEIPT_NO") == dept_no)
+        return result
+
+
+@app.get("/api/mfds/recall-serial")
+async def mfds_recall_serial(dept_no: str = ""):
+    """DEPT_RECEIPT_NO에 해당하는 제조번호(모델목록) 반환."""
+    if not dept_no:
+        return {"ok": False, "error": "dept_no 파라미터 필요"}
+    try:
+        records = await _find_serial_records(dept_no)
+        return {"ok": True, "dept_no": dept_no, "count": len(records), "records": records}
+    except Exception as e:
+        logger.exception("recall-serial 오류")
+        return {"ok": False, "error": str(e)}
+
+
 # ── 병원 자산 엑셀 업로드 + 회수 매칭 분석 ──────────────────────────
 @app.post("/api/mfds/match")
 async def mfds_match(file: UploadFile = File(...)):
