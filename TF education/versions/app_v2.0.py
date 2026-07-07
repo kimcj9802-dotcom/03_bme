@@ -50,8 +50,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OLLAMA_URL  = "http://121.138.151.6:11434/api/chat"
-EMBED_URL   = "http://121.138.151.6:11434/api/embeddings"
+OLLAMA_URL  = "http://121.138.151.6:11500/api/chat"
+EMBED_URL   = "http://121.138.151.6:11500/api/embeddings"
 MODEL       = "qwen3.6:35b-a3b"
 EMBED_MODEL = "bge-m3:latest"
 TOP_K          = 3     # 검색해서 모델에 넘길 조각 수 (상위 2~3개)

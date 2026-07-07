@@ -14,7 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OLLAMA_URL = "http://121.138.151.6:11434/api/chat"
+OLLAMA_URL = "http://121.138.151.6:11500/api/chat"
 MODEL = "qwen3.6:35b-a3b"
 SYSTEM_PROMPT = "참고 자료에만 근거해 한국어로 간결히 답한다. 자료에 없으면 '확인되지 않습니다'라고 한다."
 
