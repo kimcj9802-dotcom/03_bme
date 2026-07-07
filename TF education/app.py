@@ -1019,16 +1019,16 @@ async def reset_docs(
 
 @app.get("/api/devices")
 async def get_devices():
-    """업로드된 장비/모델 목록 반환 — 고장 대응 드롭다운용."""
+    """업로드된 장비/모델 목록 + 조각 수 반환 — 드롭다운·현황 카드 공용."""
     devices = []
     seen: set[tuple] = set()
-    for key in _user_docs:
+    for key, chunks in _user_docs.items():
         parts = key.split("|", 1)
         dn = parts[0].strip()
         mn = parts[1].strip() if len(parts) > 1 else ""
         if dn and (dn, mn) not in seen:
             seen.add((dn, mn))
-            devices.append({"device_name": dn, "model_name": mn})
+            devices.append({"device_name": dn, "model_name": mn, "chunk_count": len(chunks)})
     devices.sort(key=lambda x: (x["device_name"], x["model_name"]))
     return {"ok": True, "devices": devices}
 

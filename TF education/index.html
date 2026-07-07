@@ -142,6 +142,19 @@
   .recall-asset-drop:hover { border-color:#1a3a6b; background:#f0f4ff; }
   .recall-asset-drop.dragging { border-color:#e08000; background:#fffbf0; }
 
+  /* ── 업로드 자료 현황 ── */
+  .docs-list-wrap { margin-top: 4px; }
+  .docs-device-group { margin-bottom: 14px; }
+  .docs-device-group:last-child { margin-bottom: 0; }
+  .docs-device-header { font-size: .82rem; font-weight: 700; color: #0d3b6e; padding: 6px 8px; background: #eef3fb; border-radius: 6px; margin-bottom: 4px; }
+  .docs-model-row { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; padding: 5px 10px; color: #333; border-bottom: 1px solid #f0f3f8; }
+  .docs-model-row:last-child { border-bottom: none; }
+  .docs-model-name { display: flex; align-items: center; gap: 6px; }
+  .docs-chunk-badge { font-size: .72rem; background: #e8f0fb; color: #1a3a6b; border-radius: 10px; padding: 2px 9px; font-weight: 700; white-space: nowrap; }
+  .docs-del-btn { font-size: .7rem; padding: 2px 8px; background: #f0f0f0; color: #c00; border: 1px solid #ddd; border-radius: 6px; width: auto; cursor: pointer; }
+  .docs-del-btn:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+  .docs-empty { font-size: .83rem; color: #aaa; text-align: center; padding: 20px 0; }
+
   /* ── 자료 업로드 ── */
   .upload-device-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
   @media (max-width: 520px) { .upload-device-row { grid-template-columns: 1fr; } }
@@ -419,6 +432,18 @@
 
   <!-- ══ 자료 업로드 패널 (관리자 전용) ══ -->
   <div id="panel-upload" class="tab-panel">
+
+    <!-- 현재 업로드된 자료 현황 -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="card-label" style="margin-bottom:0;">📚 현재 업로드된 자료</div>
+        <button onclick="loadDeviceList()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
+      </div>
+      <div class="docs-list-wrap" id="docs-list-wrap">
+        <div class="docs-empty">자료를 불러오는 중…</div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-label">📄 PDF 매뉴얼 업로드</div>
 
@@ -521,6 +546,49 @@
       _deviceList = data.devices ?? [];
     } catch { _deviceList = []; }
     _populateDeviceSelect();
+    renderDocsList();
+  }
+
+  function renderDocsList() {
+    const wrap = document.getElementById("docs-list-wrap");
+    if (!wrap) return;
+    if (!_deviceList.length) {
+      wrap.innerHTML = '<div class="docs-empty">업로드된 자료가 없습니다.</div>';
+      return;
+    }
+    const grouped = {};
+    _deviceList.forEach(d => {
+      if (!grouped[d.device_name]) grouped[d.device_name] = [];
+      grouped[d.device_name].push(d);
+    });
+    wrap.innerHTML = Object.entries(grouped).map(([dn, models]) => `
+      <div class="docs-device-group">
+        <div class="docs-device-header">📁 ${dn}</div>
+        ${models.map(m => `
+          <div class="docs-model-row">
+            <div class="docs-model-name">
+              <span>└ ${m.model_name || "(공통)"}</span>
+              <span class="docs-chunk-badge">${m.chunk_count ?? 0}개 조각</span>
+            </div>
+            <button class="docs-del-btn"
+              onclick="deleteDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">삭제</button>
+          </div>`).join("")}
+      </div>`).join("");
+  }
+
+  async function deleteDoc(deviceName, modelName) {
+    if (!confirm(`"${deviceName} / ${modelName || '(공통)'}" 자료를 삭제할까요?`)) return;
+    const fd = new FormData();
+    fd.append("device_name", deviceName);
+    fd.append("model_name",  modelName);
+    try {
+      const res  = await fetch(BE + "/api/reset-docs", { method: "POST", body: fd });
+      const data = await res.json();
+      setUploadStatus("ok", `✅ ${data.message}`);
+      await loadDeviceList();
+    } catch (err) {
+      setUploadStatus("err", `❌ ${err.message}`);
+    }
   }
 
   function _populateDeviceSelect() {
