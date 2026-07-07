@@ -325,13 +325,23 @@ def _parse_excel_assets(xlsx_bytes: bytes) -> list[dict]:
 
 
 # ── 임베딩 유틸 ──────────────────────────────────────────────────────
+class EmbedUnavailable(RuntimeError):
+    """임베딩 게이트웨이 장애 시 raise — 호출 체인 어디서든 잡을 수 있도록 분리."""
+
 async def embed(text: str) -> np.ndarray:
     """단일 텍스트를 bge-m3:latest로 임베딩해 1-D numpy 배열로 반환."""
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        res = await client.post(EMBED_URL, json={"model": EMBED_MODEL, "prompt": text})
-        res.raise_for_status()
-        vec = res.json()["embedding"]   # 단수 키
-    return np.array(vec, dtype=np.float32)
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.post(EMBED_URL, json={"model": EMBED_MODEL, "prompt": text})
+            res.raise_for_status()
+            vec = res.json()["embedding"]   # 단수 키
+        return np.array(vec, dtype=np.float32)
+    except (httpx.ConnectError, httpx.TimeoutException):
+        raise EmbedUnavailable("지금은 검색 기능을 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.")
+    except httpx.HTTPStatusError as e:
+        raise EmbedUnavailable(f"임베딩 서버 오류(HTTP {e.response.status_code}). 잠시 후 다시 시도해 주세요.")
+    except (KeyError, ValueError):
+        raise EmbedUnavailable("임베딩 서버 응답이 올바르지 않습니다. 잠시 후 다시 시도해 주세요.")
 
 
 def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
@@ -480,9 +490,14 @@ async def stream_recall(context: str):
 async def chat(req: ChatRequest):
     async def sse_harness():
         # 토큰 → sources 이벤트 → [DONE]  (이 순서를 지켜야 프론트가 sources를 읽음)
-        chunks, sources = await retrieve(
-            req.question, req.device_name, req.model_name, top_k=TOP_K
-        )
+        try:
+            chunks, sources = await retrieve(
+                req.question, req.device_name, req.model_name, top_k=TOP_K
+            )
+        except EmbedUnavailable as e:
+            yield f"data: {json.dumps({'token': f'⚠️ {e}'}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+            return
         context     = "\n\n".join(chunks)
         sys_prompt  = build_system_prompt(req.device_name, req.model_name)
         async for chunk in stream_ollama(req.question, context, sys_prompt):
@@ -1055,13 +1070,16 @@ async def debug_docs():
 @app.post("/api/debug-retrieve")
 async def debug_retrieve(req: ChatRequest):
     """질문에 대해 실제로 선택된 청크와 유사도를 반환 (디버그용)."""
-    all_docs   = _get_all_docs()
-    doc_vecs   = await ensure_doc_embeddings()
-    candidates = _get_candidate_indices(req.device_name, req.model_name)
-    search_q   = " ".join(filter(None, [req.device_name, req.model_name, req.question]))
-    q_vec      = await embed(search_q)
-    sims       = {i: float(cosine_sim(q_vec, doc_vecs[i])) for i in candidates}
-    ranked     = sorted(candidates, key=lambda i: sims[i], reverse=True)[:TOP_K * 2]
+    try:
+        all_docs   = _get_all_docs()
+        doc_vecs   = await ensure_doc_embeddings()
+        candidates = _get_candidate_indices(req.device_name, req.model_name)
+        search_q   = " ".join(filter(None, [req.device_name, req.model_name, req.question]))
+        q_vec      = await embed(search_q)
+    except EmbedUnavailable as e:
+        return {"ok": False, "error": str(e)}
+    sims   = {i: float(cosine_sim(q_vec, doc_vecs[i])) for i in candidates}
+    ranked = sorted(candidates, key=lambda i: sims[i], reverse=True)[:TOP_K * 2]
     return {
         "search_query": search_q,
         "candidates_total": len(candidates),
