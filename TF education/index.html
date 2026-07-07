@@ -146,7 +146,11 @@
   .docs-list-wrap { margin-top: 4px; }
   .docs-device-group { margin-bottom: 14px; }
   .docs-device-group:last-child { margin-bottom: 0; }
-  .docs-device-header { font-size: .82rem; font-weight: 700; color: #0d3b6e; padding: 6px 8px; background: #eef3fb; border-radius: 6px; margin-bottom: 4px; }
+  .docs-device-header { font-size: .82rem; font-weight: 700; color: #0d3b6e; padding: 6px 10px; background: #eef3fb; border-radius: 6px; margin-bottom: 4px; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; }
+  .docs-device-header:hover { background: #dce8f7; }
+  .docs-device-caret { font-size: .75rem; transition: transform 0.2s; display: inline-block; }
+  .docs-device-body { overflow: hidden; }
+  .docs-device-body.collapsed { display: none; }
   .docs-model-row { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; padding: 5px 10px; color: #333; border-bottom: 1px solid #f0f3f8; }
   .docs-model-row:last-child { border-bottom: none; }
   .docs-model-name { display: flex; align-items: center; gap: 6px; }
@@ -433,25 +437,15 @@
   <!-- ══ 자료 업로드 패널 (관리자 전용) ══ -->
   <div id="panel-upload" class="tab-panel">
 
-    <!-- 현재 업로드된 자료 현황 -->
+    <!-- ① 매뉴얼 업로드 -->
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div class="card-label" style="margin-bottom:0;">📚 현재 업로드된 자료</div>
-        <button onclick="loadDeviceList()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
-      </div>
-      <div class="docs-list-wrap" id="docs-list-wrap">
-        <div class="docs-empty">자료를 불러오는 중…</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-label">📄 PDF 매뉴얼 업로드</div>
+      <div class="card-label">📄 매뉴얼 업로드</div>
 
       <!-- 업로드 대상 장비/모델 지정 -->
       <div class="upload-device-row">
         <div>
           <label for="up-device-name">장비명 (업로드 대상)</label>
-          <input id="up-device-name" type="text" placeholder="예) 주입펌프" />
+          <input id="up-device-name" type="text" placeholder="예) 수액 자동주입기" />
         </div>
         <div>
           <label for="up-model-name">모델명 (업로드 대상)</label>
@@ -463,14 +457,16 @@
            onclick="document.getElementById('pdf-input').click()"
            ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
         <div class="drop-icon">📂</div>
-        <p><strong>클릭하거나 PDF를 드래그해서 업로드</strong></p>
+        <p><strong>클릭하거나 파일을 드래그해서 업로드</strong></p>
         <small>스캔본(이미지 PDF)도 OCR로 자동 처리 · 문제 해결 / 오류 코드 섹션 자동 추출</small>
+      </div>
+      <div style="margin-top:8px;font-size:.75rem;color:#888;text-align:center;">
+        📎 업로드 가능 형식: <strong>PDF</strong> (.pdf)
       </div>
       <input type="file" id="pdf-input" accept=".pdf" style="display:none" onchange="onFileSelected(this)" />
       <div id="selected-file" class="selected-file"></div>
 
       <button id="upload-btn" onclick="uploadPDF()" style="margin-top:12px;" disabled>업로드 및 파싱 시작</button>
-      <button id="reset-docs-btn" onclick="resetDocs()">🗑 선택 장비·모델 자료 삭제</button>
 
       <div id="upload-status"></div>
       <div class="upload-preview" id="upload-preview">
@@ -479,6 +475,18 @@
       </div>
     </div>
 
+    <!-- ② 현재 업로드된 자료 현황 -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="card-label" style="margin-bottom:0;">📚 현재 업로드된 자료</div>
+        <button onclick="loadDeviceList()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
+      </div>
+      <div class="docs-list-wrap" id="docs-list-wrap">
+        <div class="docs-empty">자료를 불러오는 중…</div>
+      </div>
+    </div>
+
+    <!-- ③ 업로드 안내 -->
     <div class="card" style="background:#fffbf0; border:1px solid #f0d080;">
       <div class="card-label" style="color:#7a5800;">📌 업로드 안내</div>
       <ul style="font-size:.82rem; line-height:2; color:#555; padding-left:1.2em;">
@@ -561,19 +569,38 @@
       if (!grouped[d.device_name]) grouped[d.device_name] = [];
       grouped[d.device_name].push(d);
     });
-    wrap.innerHTML = Object.entries(grouped).map(([dn, models]) => `
-      <div class="docs-device-group">
-        <div class="docs-device-header">📁 ${dn}</div>
-        ${models.map(m => `
-          <div class="docs-model-row">
-            <div class="docs-model-name">
-              <span>└ ${m.model_name || "(공통)"}</span>
-              <span class="docs-chunk-badge">${m.chunk_count ?? 0}개 조각</span>
-            </div>
-            <button class="docs-del-btn"
-              onclick="deleteDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">삭제</button>
-          </div>`).join("")}
-      </div>`).join("");
+    const sortedDevices = Object.keys(grouped).sort((a, b) => a.localeCompare(b, 'ko'));
+    wrap.innerHTML = sortedDevices.map(dn => {
+      const models = grouped[dn].slice().sort((a, b) =>
+        (a.model_name || '').localeCompare(b.model_name || '', 'ko'));
+      const bodyId = 'docs-body-' + dn.replace(/[^a-zA-Z0-9가-힣]/g, '_');
+      return `
+        <div class="docs-device-group">
+          <div class="docs-device-header" onclick="toggleDocsGroup('${bodyId}', this)">
+            <span>📁 ${dn}</span>
+            <span class="docs-device-caret">▼</span>
+          </div>
+          <div class="docs-device-body" id="${bodyId}">
+            ${models.map(m => `
+              <div class="docs-model-row">
+                <div class="docs-model-name">
+                  <span>└ ${m.model_name || "(공통)"}</span>
+                  <span class="docs-chunk-badge">${m.chunk_count ?? 0}개 조각</span>
+                </div>
+                <button class="docs-del-btn"
+                  onclick="deleteDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">삭제</button>
+              </div>`).join("")}
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  function toggleDocsGroup(bodyId, header) {
+    const body = document.getElementById(bodyId);
+    const caret = header.querySelector('.docs-device-caret');
+    if (!body) return;
+    const collapsed = body.classList.toggle('collapsed');
+    if (caret) caret.style.transform = collapsed ? 'rotate(-90deg)' : '';
   }
 
   async function deleteDoc(deviceName, modelName) {
