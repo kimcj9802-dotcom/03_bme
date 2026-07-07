@@ -48,8 +48,10 @@
   .device-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 520px) { .device-row { grid-template-columns: 1fr; } }
   .device-row label { font-size: .75rem; font-weight: 600; color: #555; display: block; margin-bottom: 4px; }
-  .device-row input { width: 100%; border: 1.5px solid #d0d8e4; border-radius: 8px; padding: 8px 12px; font-size: .9rem; font-family: inherit; background: #fafbfd; transition: border-color .2s; }
-  .device-row input:focus { outline: none; border-color: #0d3b6e; background: #fff; }
+  .device-row input, .device-row select { width: 100%; border: 1.5px solid #d0d8e4; border-radius: 8px; padding: 8px 12px; font-size: .9rem; font-family: inherit; background: #fafbfd; transition: border-color .2s; appearance: none; }
+  .device-row input:focus, .device-row select:focus { outline: none; border-color: #0d3b6e; background: #fff; }
+  .device-row select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; cursor: pointer; }
+  .device-row select:disabled { color: #aaa; cursor: default; }
   #device-tag {
     display: none; margin-top: 10px;
     font-size: .78rem; padding: 4px 12px;
@@ -103,17 +105,6 @@
   .chip { font-size: .78rem; padding: 4px 12px; border: 1.5px solid #0d3b6e; border-radius: 20px; color: #0d3b6e; background: #f0f5fc; cursor: pointer; transition: background .15s; width: auto; font-weight: 500; }
   .chip:hover { background: #dce8f8; }
 
-  /* ── 오류 코드 검색 (질문 입력란 하단, 카드 내부) ── */
-  .err-divider { border: none; border-top: 1px solid #e8edf5; margin: 14px 0 12px; }
-  .err-section-label { font-size: .72rem; font-weight: 700; color: #b03a2e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
-  .err-search-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  #err-code-input { flex: 1; min-width: 100px; max-width: 160px; border: 1.5px solid #f0c0b8; border-radius: 8px; padding: 7px 12px; font-size: .92rem; font-family: inherit; background: #fdf8f7; text-transform: uppercase; letter-spacing: .06em; transition: border-color .2s; }
-  #err-code-input:focus { outline: none; border-color: #b03a2e; background: #fff; }
-  #err-search-btn { width: auto; padding: 7px 16px; font-size: .85rem; font-weight: 700; background: #b03a2e; border-radius: 8px; white-space: nowrap; }
-  #err-search-btn:hover:not(:disabled) { background: #922e24; }
-  .err-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  .err-chip { font-size: .8rem; padding: 4px 14px; border: 2px solid #b03a2e; border-radius: 20px; color: #b03a2e; background: #fdf2f1; cursor: pointer; transition: background .15s, color .15s; width: auto; font-weight: 700; letter-spacing: .04em; }
-  .err-chip:hover { background: #b03a2e; color: #fff; }
 
   /* ── 리콜 ── */
   .source-chip { display: inline-block; margin-top: 8px; font-size: .75rem; padding: 3px 10px; border: 1px solid #1a6b3a; border-radius: 12px; color: #1a6b3a; background: #edf7f1; }
@@ -217,17 +208,21 @@
   <!-- ══ 고장 대응 패널 ══ -->
   <div id="panel-failure" class="tab-panel panel-active">
 
-    <!-- 장비 정보 입력 -->
+    <!-- 장비 정보 선택 -->
     <div class="card">
       <div class="card-label">🔧 장비 정보</div>
       <div class="device-row">
         <div>
-          <label for="device-name">장비명</label>
-          <input id="device-name" type="text" placeholder="예) 주입펌프" oninput="updateDeviceTag()" />
+          <label for="device-name">장비명 (대분류)</label>
+          <select id="device-name" onchange="onDeviceChange()">
+            <option value="">-- 장비 선택 --</option>
+          </select>
         </div>
         <div>
-          <label for="model-name">모델명</label>
-          <input id="model-name" type="text" placeholder="예) DI-2200P" oninput="updateDeviceTag()" />
+          <label for="model-name">모델명 (중분류)</label>
+          <select id="model-name" onchange="updateDeviceTag()" disabled>
+            <option value="">-- 장비 먼저 선택 --</option>
+          </select>
         </div>
       </div>
       <div id="device-tag"></div>
@@ -253,21 +248,6 @@
         <button class="chip" onclick="setQ('배터리 교체 기준이 어떻게 되나요?')">배터리 교체 기준</button>
         <button class="chip" onclick="setQ('소독 및 세척 절차를 알려줘.')">세척·소독 절차</button>
         <button class="chip" onclick="setQ('정기 점검 항목을 알려줘.')">정기 점검 항목</button>
-      </div>
-
-      <!-- 오류 코드 빠른 검색 (질문 입력란 하단) -->
-      <hr class="err-divider">
-      <div class="err-section-label">⚠ 오류 코드 빠른 검색</div>
-      <div class="err-search-row">
-        <input id="err-code-input" type="text" placeholder="예) E12" maxlength="10"
-               onkeydown="if(event.key==='Enter') searchErrCode()" />
-        <button id="err-search-btn" onclick="searchErrCode()">코드 검색</button>
-      </div>
-      <div class="err-chips">
-        <button class="err-chip" onclick="searchErrCode('E12')">E12</button>
-        <button class="err-chip" onclick="searchErrCode('E15')">E15</button>
-        <button class="err-chip" onclick="searchErrCode('E21')">E21</button>
-        <button class="err-chip" onclick="searchErrCode('E33')">E33</button>
       </div>
 
       <button id="send-btn" style="margin-top:14px;" onclick="sendQuestion()">질문하기</button>
@@ -465,7 +445,7 @@
       <div id="selected-file" class="selected-file"></div>
 
       <button id="upload-btn" onclick="uploadPDF()" style="margin-top:12px;" disabled>업로드 및 파싱 시작</button>
-      <button id="reset-docs-btn" onclick="resetDocs()">↩ 업로드 자료 초기화 (내장 매뉴얼로 복원)</button>
+      <button id="reset-docs-btn" onclick="resetDocs()">🗑 선택 장비·모델 자료 삭제</button>
 
       <div id="upload-status"></div>
       <div class="upload-preview" id="upload-preview">
@@ -481,7 +461,7 @@
         <li>스캔 이미지 PDF는 OCR로 처리합니다 (서버에 <code>pytesseract</code> + Tesseract-OCR 필요).</li>
         <li>장비명·모델명을 입력하면 해당 장비로 태깅되어 <strong>장비별 검색</strong>에 활용됩니다.</li>
         <li>같은 장비/모델로 재업로드하면 이전 자료가 <strong>교체</strong>됩니다.</li>
-        <li>서버 재시작 시 업로드 자료는 초기화됩니다.</li>
+        <li>업로드 자료는 서버에 <strong>영구 저장</strong>됩니다. 삭제 버튼으로만 제거됩니다.</li>
       </ul>
     </div>
   </div>
@@ -529,13 +509,64 @@
     }
   }
   checkHealth();
+  loadDeviceList();
 
-  // ── 장비 태그 ────────────────────────────────────────────────────────
+  // ── 장비 드롭다운 ────────────────────────────────────────────────────
+  let _deviceList = [];   // [{device_name, model_name}, ...]
+
+  async function loadDeviceList() {
+    try {
+      const res  = await fetch(BE + "/api/devices");
+      const data = await res.json();
+      _deviceList = data.devices ?? [];
+    } catch { _deviceList = []; }
+    _populateDeviceSelect();
+  }
+
+  function _populateDeviceSelect() {
+    const sel = document.getElementById("device-name");
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">-- 장비 선택 --</option>';
+    const names = [...new Set(_deviceList.map(d => d.device_name))].sort();
+    names.forEach(dn => {
+      const opt = document.createElement("option");
+      opt.value = dn; opt.textContent = dn;
+      sel.appendChild(opt);
+    });
+    if (names.includes(cur)) sel.value = cur;
+    onDeviceChange();
+  }
+
+  function onDeviceChange() {
+    const dn   = document.getElementById("device-name").value;
+    const mSel = document.getElementById("model-name");
+    mSel.innerHTML = "";
+    if (!dn) {
+      mSel.innerHTML = '<option value="">-- 장비 먼저 선택 --</option>';
+      mSel.disabled = true;
+    } else {
+      const models = _deviceList
+        .filter(d => d.device_name === dn)
+        .map(d => d.model_name)
+        .sort();
+      const blank = document.createElement("option");
+      blank.value = ""; blank.textContent = "-- 모델 선택 --";
+      mSel.appendChild(blank);
+      models.forEach(mn => {
+        const opt = document.createElement("option");
+        opt.value = mn; opt.textContent = mn || "(공통)";
+        mSel.appendChild(opt);
+      });
+      mSel.disabled = false;
+    }
+    updateDeviceTag();
+  }
+
   function updateDeviceTag() {
-    const dn = document.getElementById("device-name").value.trim();
-    const mn = document.getElementById("model-name").value.trim();
+    const dn  = document.getElementById("device-name").value;
+    const mn  = document.getElementById("model-name").value;
     const tag = document.getElementById("device-tag");
-    if (dn || mn) {
+    if (dn) {
       tag.textContent = `🔍 검색 대상: ${[dn, mn].filter(Boolean).join(" / ")}`;
       tag.style.display = "block";
     } else {
@@ -605,16 +636,6 @@
     document.getElementById("btn-vibe").classList.toggle("t-active",  vibe);
     document.getElementById("btn-harn").classList.toggle("t-active", !vibe);
     document.getElementById("mode-desc").textContent = vibe ? "모델 직접 호출 (출처 없음)" : "검색 + 출처 표시";
-  }
-
-  // ── 오류 코드 검색 ───────────────────────────────────────────────────
-  function searchErrCode(code) {
-    const raw = (code ?? document.getElementById("err-code-input").value).trim().toUpperCase();
-    if (!raw) { alert("오류 코드를 입력하거나 칩을 선택하세요."); return; }
-    if (bareMode) setMode(false);
-    document.getElementById("question").value = `오류 코드 ${raw}의 의미와 조치를 매뉴얼 근거로 알려줘.`;
-    document.getElementById("err-code-input").value = raw;
-    sendQuestion();
   }
 
   // ── 질문 전송 ────────────────────────────────────────────────────────
@@ -737,6 +758,7 @@
         setUploadStatus("ok",
           `✅ 완료${ocrNote}${devNote ? " — " + devNote : ""} · ${data.pages_processed}페이지 / ${data.chunks_extracted}개 조각 추출 · 검색에 즉시 반영됩니다.`
         );
+        await loadDeviceList();   // 고장 대응 드롭다운 갱신
         const contentEl = document.getElementById("preview-content");
         contentEl.innerHTML = (data.preview ?? []).map(chunk =>
           `<div class="preview-chunk">${chunk.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>`
@@ -762,6 +784,7 @@
       const data = await res.json();
       setUploadStatus("ok", `✅ ${data.message}`);
       document.getElementById("upload-preview").style.display = "none";
+      await loadDeviceList();   // 고장 대응 드롭다운 갱신
       selectedFile = null;
       document.getElementById("selected-file").style.display = "none";
       document.getElementById("pdf-input").value = "";

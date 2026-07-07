@@ -10,6 +10,7 @@ import difflib
 import httpx
 import json
 import numpy as np
+import os
 import logging
 
 logging.basicConfig(
@@ -52,54 +53,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OLLAMA_URL  = "http://121.138.151.6:11500/api/chat"
-EMBED_URL   = "http://121.138.151.6:11500/api/embeddings"
-MODEL       = "qwen3.6:35b-a3b"
-EMBED_MODEL = "bge-m3:latest"
+_LLM_BASE   = os.getenv("LLM_BASE",    "http://121.138.151.6:11500")
+OLLAMA_URL  = f"{_LLM_BASE}/api/chat"
+EMBED_URL   = f"{_LLM_BASE}/api/embeddings"
+MODEL       = os.getenv("LLM_MODEL",   "qwen3.6:35b-a3b")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "bge-m3:latest")
 TOP_K          = 3     # 검색해서 모델에 넘길 조각 수 (상위 2~3개)
 SIM_THRESHOLD  = 0.3  # 잡음 제거용 낮은 임계값 — 최상위 조각은 미달해도 항상 포함
-
-# ── 매뉴얼 조각 (각 조각 = 독립적으로 임베딩·검색되는 단위) ────────────
-DOCS = [
-    "1) 폐색 알람(Occlusion / 알람코드 AL-OCC) — p.42\n"
-    "증상: 주입 중 \"폐색\" 경고음과 함께 펌프 정지.\n"
-    "점검: ① 라인 꺾임·눌림 확인 ② 클램프(잠금) 열림 확인 ③ 필터·삼방활전 막힘 확인.\n"
-    "조치: 막힌 원인 해소 후 [재개] 버튼. 해소 후에도 지속되면 압력센서 점검 대상 → 서비스 요청.",
-
-    "2) 압력 상승 경고(High Pressure / 알람코드 AL-PRS) — p.43\n"
-    "증상: 주입압이 설정 상한을 넘으면 경고.\n"
-    "점검: 카테터 위치·환자 자세·라인 길이 확인, 점도 높은 약액 여부 확인.\n"
-    "조치: 원인 제거 후 압력 상한 재설정. 반복되면 압력센서 캘리브레이션 필요(자격 기술자).",
-
-    "3) 배터리 점검·교체 — p.61\n"
-    "기준: 완충 후 연속 사용시간 표시 확인. 만충 대비 80% 미만이면 배터리 교체 대상.\n"
-    "주의: 정품 배터리만 사용, 임의 분해 금지. 교체 후 충전 사이클 1회 권장.",
-
-    "4) 센서 오류 코드 모음 — p.78\n"
-    "E12: 공기방울 감지센서 커넥터 접촉 불량 → 커넥터 재결합 후 전원 재시작.\n"
-    "E15: 압력센서 신호 불안정 → 캘리브레이션 필요(자격 기술자 전용).\n"
-    "E21: 도어 닫힘 감지 실패 → 도어 래치·자석 위치 확인.\n"
-    "E33: 내부 온도 과열 → 통풍구 확인, 30분 냉각 후 재가동.",
-
-    "5) 공기 알람(Air-in-line / 알람코드 AL-AIR) — p.45\n"
-    "증상: 라인 내 기포 감지 시 정지.\n"
-    "점검: 챔버 액위, 라인 프라이밍 상태, 센서 창 오염 확인.\n"
-    "조치: 라인 재프라이밍·기포 제거 후 재개. 센서 창 이물은 마른 천으로 닦기.",
-
-    "6) 세척·소독 절차 — p.90\n"
-    "외장: 전원 차단 후 중성세제 적신 천으로 닦고 건조. 분무·침수 금지.\n"
-    "소독: 70% 알코올 천 사용 가능, 화면·센서 창은 강한 용제 금지.\n"
-    "주기: 환자 교체 시마다 외장 소독 권장.",
-
-    "7) 정기 점검 항목 — p.102\n"
-    "일일: 알람음·화면 표시·배터리 잔량 확인.\n"
-    "월간: 압력센서 동작, 도어 래치, 충전 상태 점검.\n"
-    "연간: 압력센서 캘리브레이션, 누설전류 측정(자격 기술자·점검 기록보관).",
-
-    "8) 작업 안전 원칙 — p.7\n"
-    "본 매뉴얼의 점검·조치는 자격 갖춘 기술자 전용. 임의 분해·내부 회로 수리·부품 개조 금지.\n"
-    "의심 시 제조사 서비스 요청. 환자 연결 상태에서의 점검은 금지(반드시 라인 분리 후).",
-]
 
 # ── 임베딩 캐시 (앱 수명 동안 유지) ──────────────────────────────────
 _doc_embeddings: np.ndarray | None = None   # shape (N, D)
@@ -127,8 +87,8 @@ def _save_user_docs() -> None:
 _user_docs: dict[str, list[str]] = _load_user_docs()
 
 def _get_all_docs() -> list[str]:
-    """내장 DOCS + 모든 업로드 조각을 펼쳐 반환."""
-    result = list(DOCS)
+    """업로드된 모든 조각을 펼쳐 반환."""
+    result = []
     for chunks in _user_docs.values():
         result.extend(chunks)
     return result
@@ -137,20 +97,17 @@ def _device_key(device_name: str, model_name: str) -> str:
     return f"{device_name.strip()}|{model_name.strip()}"
 
 def _get_candidate_indices(device_name: str, model_name: str) -> list[int]:
-    """지정 장비/모델의 업로드 조각 + 내장 DOCS 인덱스 반환.
-    장비 미지정이면 전체 인덱스."""
+    """지정 장비/모델의 업로드 조각 인덱스 반환. 미지정이면 전체."""
     all_docs = _get_all_docs()
     key = _device_key(device_name, model_name)
     if not key.strip("|") or not _user_docs:
         return list(range(len(all_docs)))
-    # 내장 DOCS는 항상 포함
-    indices = list(range(len(DOCS)))
-    offset = len(DOCS)
+    indices, offset = [], 0
     for k, chunks in _user_docs.items():
         if k == key:
             indices.extend(range(offset, offset + len(chunks)))
         offset += len(chunks)
-    return indices
+    return indices if indices else list(range(len(all_docs)))
 
 # ── PDF 문제 해결 섹션 키워드 패턴 ────────────────────────────────────
 TROUBLESHOOT_RE = re.compile(
@@ -1054,10 +1011,26 @@ async def reset_docs(
         msg = f"'{device_name} {model_name}' 업로드 자료가 초기화되었습니다."
     else:
         _user_docs.clear()
-        msg = "모든 업로드 자료가 초기화되었습니다. 내장 매뉴얼만 사용합니다."
+        msg = "모든 업로드 자료가 초기화되었습니다."
     _doc_embeddings = None
     _save_user_docs()           # 디스크에 반영
     return {"ok": True, "message": msg}
+
+
+@app.get("/api/devices")
+async def get_devices():
+    """업로드된 장비/모델 목록 반환 — 고장 대응 드롭다운용."""
+    devices = []
+    seen: set[tuple] = set()
+    for key in _user_docs:
+        parts = key.split("|", 1)
+        dn = parts[0].strip()
+        mn = parts[1].strip() if len(parts) > 1 else ""
+        if dn and (dn, mn) not in seen:
+            seen.add((dn, mn))
+            devices.append({"device_name": dn, "model_name": mn})
+    devices.sort(key=lambda x: (x["device_name"], x["model_name"]))
+    return {"ok": True, "devices": devices}
 
 
 @app.get("/health")
