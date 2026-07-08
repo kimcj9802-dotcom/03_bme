@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
+﻿from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -11,7 +11,6 @@ import httpx
 import json
 import numpy as np
 import os
-import uuid as _uuid
 import logging
 
 logging.basicConfig(
@@ -86,41 +85,6 @@ def _save_user_docs() -> None:
     )
 
 _user_docs: dict[str, list[str]] = _load_user_docs()
-
-# ── 관리자 계정 관리 ──────────────────────────────────────────────────
-# TODO: 운영 전환 시 비밀번호를 해시+외부 설정으로 이전할 것
-_ADMIN_FILE = _DATA_DIR / "admins.json"
-
-def _load_admins() -> dict[str, dict]:
-    if _ADMIN_FILE.exists():
-        try:
-            return json.loads(_ADMIN_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return {"2022137": {"password": "admin1234", "role": "master"}}
-
-def _save_admins() -> None:
-    _ADMIN_FILE.write_text(
-        json.dumps(_admin_store, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-_admin_store: dict[str, dict] = _load_admins()
-_admin_sessions: dict[str, dict] = {}  # {token: {admin_id, role}}
-
-def _get_session(request: Request) -> dict | None:
-    return _admin_sessions.get(request.headers.get("X-Admin-Token", ""))
-
-def _require_admin(request: Request) -> dict:
-    s = _get_session(request)
-    if not s:
-        raise HTTPException(status_code=401, detail="관리자 로그인이 필요합니다.")
-    return s
-
-def _require_master(request: Request) -> dict:
-    s = _require_admin(request)
-    if s["role"] != "master":
-        raise HTTPException(status_code=403, detail="마스터 관리자 권한이 필요합니다.")
-    return s
 
 def _get_all_docs() -> list[str]:
     """업로드된 모든 조각을 펼쳐 반환."""
@@ -467,18 +431,6 @@ class RecallItem(BaseModel):
 class RecallCheckRequest(BaseModel):
     inventory: list[DeviceItem]
     recall_notice: list[RecallItem]
-
-
-class AdminLoginRequest(BaseModel):
-    admin_id: str
-    password: str
-
-class AddAdminRequest(BaseModel):
-    admin_id: str
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
 
 
 # ── 스트리밍 헬퍼 ─────────────────────────────────────────────────────
@@ -945,85 +897,6 @@ async def mfds_match(file: UploadFile = File(...)):
     }
 
 
-# ── 관리자 인증 API ───────────────────────────────────────────────────
-@app.post("/api/admin/login")
-async def admin_login(req: AdminLoginRequest):
-    acc = _admin_store.get(req.admin_id.strip())
-    if not acc or acc["password"] != req.password:
-        return {"ok": False, "error": "아이디 또는 비밀번호가 올바르지 않습니다."}
-    token = str(_uuid.uuid4())
-    _admin_sessions[token] = {"admin_id": req.admin_id.strip(), "role": acc["role"]}
-    logger.info("관리자 로그인: %s (role=%s)", req.admin_id, acc["role"])
-    return {"ok": True, "token": token, "role": acc["role"], "admin_id": req.admin_id.strip()}
-
-
-@app.post("/api/admin/logout")
-async def admin_logout(request: Request):
-    token = request.headers.get("X-Admin-Token", "")
-    s = _admin_sessions.pop(token, None)
-    if s:
-        logger.info("관리자 로그아웃: %s", s.get("admin_id"))
-    return {"ok": True}
-
-
-@app.get("/api/admin/users")
-async def list_admin_users(request: Request):
-    _require_master(request)
-    users = [
-        {"admin_id": aid, "role": d["role"]}
-        for aid, d in sorted(_admin_store.items())
-    ]
-    return {"ok": True, "users": users}
-
-
-@app.post("/api/admin/users/add")
-async def add_admin_user(req: AddAdminRequest, request: Request):
-    _require_master(request)
-    aid = req.admin_id.strip()
-    if not aid:
-        return {"ok": False, "error": "사번을 입력해 주세요."}
-    if aid in _admin_store:
-        return {"ok": False, "error": f"이미 등록된 사번입니다: {aid}"}
-    _admin_store[aid] = {"password": "admin1234", "role": "admin"}
-    _save_admins()
-    logger.info("관리자 추가: %s", aid)
-    return {"ok": True}
-
-
-@app.delete("/api/admin/users/{admin_id}")
-async def delete_admin_user(admin_id: str, request: Request):
-    s = _require_master(request)
-    if admin_id == s["admin_id"]:
-        return {"ok": False, "error": "자기 자신은 삭제할 수 없습니다."}
-    acc = _admin_store.get(admin_id)
-    if not acc:
-        return {"ok": False, "error": "존재하지 않는 사번입니다."}
-    if acc.get("role") == "master":
-        return {"ok": False, "error": "마스터 계정은 삭제할 수 없습니다."}
-    del _admin_store[admin_id]
-    for t in [t for t, sv in list(_admin_sessions.items()) if sv["admin_id"] == admin_id]:
-        del _admin_sessions[t]
-    _save_admins()
-    logger.info("관리자 삭제: %s", admin_id)
-    return {"ok": True}
-
-
-@app.post("/api/admin/change-password")
-async def change_password_api(req: ChangePasswordRequest, request: Request):
-    s = _require_admin(request)
-    acc = _admin_store.get(s["admin_id"])
-    if not acc:
-        return {"ok": False, "error": "계정 정보를 찾을 수 없습니다."}
-    if acc["password"] != req.current_password:
-        return {"ok": False, "error": "현재 비밀번호가 올바르지 않습니다."}
-    if len(req.new_password) < 6:
-        return {"ok": False, "error": "새 비밀번호는 6자 이상이어야 합니다."}
-    _admin_store[s["admin_id"]]["password"] = req.new_password
-    _save_admins()
-    logger.info("비밀번호 변경: %s", s["admin_id"])
-    return {"ok": True}
-
-
 # ── PDF 파싱 헬퍼 ─────────────────────────────────────────────────────
 def _page_to_text_ocr(page) -> str:
     """pymupdf 페이지 → 텍스트. 스캔본이면 OCR 시도."""
@@ -1096,14 +969,11 @@ def _filter_troubleshoot_chunks(
 
 @app.post("/api/upload-pdf")
 async def upload_pdf(
-    request: Request,
     file: UploadFile = File(...),
     device_name: str = Form(""),
     model_name:  str = Form(""),
 ):
     global _user_docs, _doc_embeddings
-    if not _get_session(request):
-        return {"ok": False, "error": "관리자 로그인이 필요합니다."}
     if not file.filename.lower().endswith(".pdf"):
         return {"ok": False, "error": "PDF 파일(.pdf)만 업로드 가능합니다."}
     pdf_bytes = await file.read()
@@ -1145,13 +1015,10 @@ async def upload_pdf(
 
 @app.post("/api/reset-docs")
 async def reset_docs(
-    request: Request,
     device_name: str = Form(""),
     model_name:  str = Form(""),
 ):
     """업로드 자료 초기화. 장비/모델 지정 시 해당 것만, 미지정 시 전체."""
-    if not _get_session(request):
-        return {"ok": False, "error": "관리자 로그인이 필요합니다."}
     global _user_docs, _doc_embeddings
     key = _device_key(device_name, model_name)
     if key.strip("|"):
