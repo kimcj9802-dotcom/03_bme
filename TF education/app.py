@@ -108,6 +108,24 @@ def _save_admins() -> None:
 _admin_store: dict[str, dict] = _load_admins()
 _admin_sessions: dict[str, dict] = {}  # {token: {admin_id, role}}
 
+# ── 비밀번호 초기화 요청 (파일 영구 저장) ────────────────────────────
+_RESET_FILE = _DATA_DIR / "reset_requests.json"
+
+def _load_reset_requests() -> list[dict]:
+    if _RESET_FILE.exists():
+        try:
+            return json.loads(_RESET_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
+
+def _save_reset_requests() -> None:
+    _RESET_FILE.write_text(
+        json.dumps(_reset_requests, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+_reset_requests: list[dict] = _load_reset_requests()
+
 # ── 활동 로그 (인메모리, 서버 재시작 시 초기화) ──────────────────────
 _activity_log: list[dict] = []
 _MAX_LOG = 500
@@ -506,6 +524,9 @@ class LogActivityRequest(BaseModel):
     tab:    str
     action: str
     detail: str = ""
+
+class ResetRequestBody(BaseModel):
+    admin_id: str
 
 
 # ── 스트리밍 헬퍼 ─────────────────────────────────────────────────────
@@ -1065,6 +1086,61 @@ async def log_activity_api(req: LogActivityRequest, request: Request):
     if not s:
         return {"ok": False}
     _log_activity(s, req.tab, req.action, req.detail)
+    return {"ok": True}
+
+
+# ── 비밀번호 초기화 요청 API ──────────────────────────────────────────
+@app.post("/api/admin/request-reset")
+async def request_password_reset(req: ResetRequestBody):
+    """로그인 없이 누구나 호출 가능 — 사번 존재 여부만 확인."""
+    aid = req.admin_id.strip()
+    if aid not in _admin_store:
+        return {"ok": False, "error": "등록되지 않은 사번입니다."}
+    if _admin_store[aid].get("role") == "master":
+        return {"ok": False, "error": "마스터 계정은 초기화 요청을 사용할 수 없습니다."}
+    if any(r["admin_id"] == aid for r in _reset_requests):
+        return {"ok": True, "message": "이미 초기화 요청이 접수되어 있습니다. 마스터 관리자에게 문의하세요."}
+    name = _admin_store[aid].get("name", "")
+    _reset_requests.append({
+        "admin_id": aid,
+        "name":     name,
+        "requested_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    _save_reset_requests()
+    logger.info("비밀번호 초기화 요청: %s (%s)", aid, name)
+    return {"ok": True, "message": "초기화 요청이 접수되었습니다. 마스터 관리자에게 문의하세요."}
+
+
+@app.get("/api/admin/reset-requests")
+async def get_reset_requests(request: Request):
+    _require_master(request)
+    return {"ok": True, "requests": _reset_requests}
+
+
+@app.post("/api/admin/reset-password/{admin_id}")
+async def reset_admin_password(admin_id: str, request: Request):
+    s = _require_master(request)
+    acc = _admin_store.get(admin_id)
+    if not acc:
+        return {"ok": False, "error": "존재하지 않는 사번입니다."}
+    if acc.get("role") == "master":
+        return {"ok": False, "error": "마스터 계정은 초기화할 수 없습니다."}
+    _admin_store[admin_id]["password"] = "admin1234"
+    _save_admins()
+    global _reset_requests
+    _reset_requests = [r for r in _reset_requests if r["admin_id"] != admin_id]
+    _save_reset_requests()
+    name = acc.get("name", "")
+    _log_activity(s, "설정", "비밀번호 초기화", f"{admin_id} ({name}) → admin1234")
+    return {"ok": True}
+
+
+@app.delete("/api/admin/reset-requests/{admin_id}")
+async def dismiss_reset_request(admin_id: str, request: Request):
+    _require_master(request)
+    global _reset_requests
+    _reset_requests = [r for r in _reset_requests if r["admin_id"] != admin_id]
+    _save_reset_requests()
     return {"ok": True}
 
 

@@ -8,5 +8,15 @@
     "password": "admin1234",
     "role": "admin",
     "name": "윤종부"
+  },
+  "1998051": {
+    "password": "admin1234",
+    "role": "admin",
+    "name": "장성웅"
+  },
+  "2001098": {
+    "password": "admin1234",
+    "role": "admin",
+    "name": "김정일"
   }
 }
