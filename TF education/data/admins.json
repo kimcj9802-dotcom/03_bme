@@ -18,5 +18,15 @@
     "password": "admin1234",
     "role": "admin",
     "name": "김정일"
+  },
+  "5P26097": {
+    "password": "admin1234",
+    "role": "admin",
+    "name": "김경두"
+  },
+  "2002092": {
+    "password": "admin1234",
+    "role": "admin",
+    "name": "조원일"
   }
 }

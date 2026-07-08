@@ -303,7 +303,7 @@
     <!-- 질문 + 오류 코드 검색 (하나의 카드) -->
     <div class="card">
       <!-- 바이브/하네스 토글 (관리자 전용) -->
-      <div class="mode-bar admin-only flex-display">
+      <div class="mode-bar master-only flex-display">
         <span class="mode-label">응답 모드:</span>
         <div class="toggle-wrap">
           <button class="t-vibe" id="btn-vibe" onclick="setMode(true)">⚡ 바이브</button>
@@ -907,7 +907,7 @@
     document.getElementById("sources-box").innerHTML = "";
   }
   function setMode(vibe) {
-    if (!adminRole) return;
+    if (adminRole !== "master") return;
     bareMode = vibe;
     document.getElementById("btn-vibe").classList.toggle("t-active",  vibe);
     document.getElementById("btn-harn").classList.toggle("t-active", !vibe);
@@ -921,7 +921,7 @@
     const model_name  = document.getElementById("model-name").value.trim();
     if (!question) { alert("질문을 입력해 주세요."); return; }
 
-    const useBare    = adminRole ? bareMode : false;
+    const useBare    = adminRole === "master" ? bareMode : false;
     const sourcesBox = document.getElementById("sources-box");
     sendBtn.disabled = true;
     answerBox.className = "streaming";
