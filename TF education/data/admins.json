@@ -1,10 +1,11 @@
 {
   "2022137": {
-    "password": "admin1234",
+    "password": "ckdwls111!",
     "role": "master"
   },
   "2014174": {
     "password": "admin1234",
-    "role": "admin"
+    "role": "admin",
+    "name": "윤종부"
   }
 }
