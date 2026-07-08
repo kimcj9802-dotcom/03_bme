@@ -98,7 +98,7 @@ def _load_admins() -> dict[str, dict]:
             return json.loads(_ADMIN_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return {"2022137": {"password": "admin1234", "role": "master"}}
+    return {"2022137": {"password": "admin1234", "role": "master", "name": "김창진"}}
 
 def _save_admins() -> None:
     _ADMIN_FILE.write_text(
