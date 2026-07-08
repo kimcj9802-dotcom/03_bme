@@ -516,9 +516,9 @@
         <small>스캔본(이미지 PDF)도 OCR로 자동 처리 · 문제 해결 / 오류 코드 섹션 자동 추출</small>
       </div>
       <div style="margin-top:8px;font-size:.75rem;color:#888;text-align:center;">
-        📎 업로드 가능 형식: <strong>PDF</strong> (.pdf)
+        📎 업로드 가능 형식: <strong>PDF</strong> (.pdf) &nbsp;·&nbsp; <strong>Word</strong> (.docx) &nbsp;·&nbsp; <strong>Excel</strong> (.xlsx)
       </div>
-      <input type="file" id="pdf-input" accept=".pdf" style="display:none" onchange="onFileSelected(this)" />
+      <input type="file" id="pdf-input" accept=".pdf,.docx,.xlsx" style="display:none" onchange="onFileSelected(this)" />
       <div id="selected-file" class="selected-file"></div>
 
       <button id="upload-btn" onclick="uploadPDF()" style="margin-top:12px;" disabled>업로드 및 파싱 시작</button>

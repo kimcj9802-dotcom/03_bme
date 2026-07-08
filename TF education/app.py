@@ -35,6 +35,12 @@ except ImportError:
     _FITZ_OK = False
 
 try:
+    from docx import Document as _DocxDocument   # python-docx — Word 텍스트 추출
+    _DOCX_OK = True
+except ImportError:
+    _DOCX_OK = False
+
+try:
     import pytesseract   # OCR (선택 — 없어도 동작)
     from PIL import Image
     # Windows 기본 설치 경로 자동 설정
@@ -1179,6 +1185,90 @@ def _extract_pdf_pages(pdf_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
     return pages, ocr_used
 
 
+def _extract_docx_pages(docx_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
+    """DOCX 전체 단락을 (pseudo_page_num, text) 목록으로 반환."""
+    if not _DOCX_OK:
+        raise RuntimeError("python-docx 패키지가 없습니다: pip install python-docx")
+    doc = _DocxDocument(io.BytesIO(docx_bytes))
+    pages, page_num, bucket, buf_len = [], 1, [], 0
+    CHUNK = 600
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+        bucket.append(text)
+        buf_len += len(text)
+        if buf_len >= CHUNK:
+            pages.append((page_num, "\n\n".join(bucket)))
+            page_num += 1
+            bucket, buf_len = [], 0
+    if bucket:
+        pages.append((page_num, "\n\n".join(bucket)))
+    return pages, False
+
+
+def _extract_xlsx_pages(xlsx_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
+    """XLSX 시트별 셀 내용을 (pseudo_page_num, text) 목록으로 반환."""
+    if not _XLSX_OK:
+        raise RuntimeError("openpyxl 패키지가 없습니다: pip install openpyxl")
+    wb = _openpyxl.load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
+    pages, page_num = [], 1
+    CHUNK = 600
+    for sh_name in wb.sheetnames:
+        ws = wb[sh_name]
+        row_texts, bucket, buf_len = [], [], 0
+        for row in ws.iter_rows(values_only=True):
+            cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
+            if cells:
+                row_texts.append(" | ".join(cells))
+        for row_text in row_texts:
+            bucket.append(row_text)
+            buf_len += len(row_text)
+            if buf_len >= CHUNK:
+                pages.append((page_num, f"[시트: {sh_name}]\n" + "\n".join(bucket)))
+                page_num += 1
+                bucket, buf_len = [], 0
+        if bucket:
+            pages.append((page_num, f"[시트: {sh_name}]\n" + "\n".join(bucket)))
+            page_num += 1
+    wb.close()
+    return pages, False
+
+
+def _chunk_all_pages(
+    pages: list[tuple[int, str]],
+    device_name: str = "",
+    model_name: str = "",
+) -> list[str]:
+    """전체 페이지를 조각으로 추출 (필터 없음) — docx·xlsx 전용."""
+    tag_parts = []
+    if device_name: tag_parts.append(f"장비: {device_name}")
+    if model_name:  tag_parts.append(f"모델: {model_name}")
+    tag = " / ".join(tag_parts)
+    chunks = []
+    for page_num, text in pages:
+        if not text.strip():
+            continue
+        prefix = f"[{tag} — p.{page_num}]" if tag else f"[업로드 자료 p.{page_num}]"
+        if len(text) <= 800:
+            chunks.append(f"{prefix}\n{text}")
+            continue
+        paragraphs = re.split(r"\n{2,}", text)
+        bucket: list[str] = []
+        for para in paragraphs:
+            bucket.append(para)
+            if len("\n\n".join(bucket)) > 600:
+                chunk_text = "\n\n".join(bucket).strip()
+                if chunk_text:
+                    chunks.append(f"{prefix}\n{chunk_text}")
+                bucket = []
+        if bucket:
+            chunk_text = "\n\n".join(bucket).strip()
+            if chunk_text:
+                chunks.append(f"{prefix}\n{chunk_text}")
+    return chunks
+
+
 def _filter_troubleshoot_chunks(
     pages: list[tuple[int, str]],
     device_name: str = "",
@@ -1224,32 +1314,52 @@ async def upload_pdf(
     global _user_docs, _doc_embeddings
     if not _get_session(request):
         return {"ok": False, "error": "관리자 로그인이 필요합니다."}
-    if not file.filename.lower().endswith(".pdf"):
-        return {"ok": False, "error": "PDF 파일(.pdf)만 업로드 가능합니다."}
-    pdf_bytes = await file.read()
+
+    fname = file.filename.lower()
+    if fname.endswith(".pdf"):
+        ext = ".pdf"
+    elif fname.endswith(".docx"):
+        ext = ".docx"
+    elif fname.endswith(".xlsx"):
+        ext = ".xlsx"
+    else:
+        return {"ok": False, "error": "PDF(.pdf), Word(.docx), Excel(.xlsx) 파일만 업로드 가능합니다."}
+
+    raw_bytes = await file.read()
+    ocr_used  = False
     try:
-        pages, ocr_used = _extract_pdf_pages(pdf_bytes)
+        if ext == ".pdf":
+            pages, ocr_used = _extract_pdf_pages(raw_bytes)
+            chunks = _filter_troubleshoot_chunks(pages, device_name, model_name)
+            if not chunks:
+                return {
+                    "ok": False,
+                    "error": (
+                        "문제 해결·오류 코드 관련 내용을 찾을 수 없습니다. "
+                        "파일에 Troubleshooting / Error Code / 문제 해결 섹션이 포함되어 있는지 확인하세요."
+                    ),
+                    "pages_processed": len(pages),
+                    "ocr_used": ocr_used,
+                }
+        elif ext == ".docx":
+            pages, _ = _extract_docx_pages(raw_bytes)
+            chunks = _chunk_all_pages(pages, device_name, model_name)
+            if not chunks:
+                return {"ok": False, "error": "Word 문서에서 텍스트를 추출할 수 없습니다."}
+        else:  # .xlsx
+            pages, _ = _extract_xlsx_pages(raw_bytes)
+            chunks = _chunk_all_pages(pages, device_name, model_name)
+            if not chunks:
+                return {"ok": False, "error": "엑셀 파일에서 내용을 추출할 수 없습니다."}
     except RuntimeError as e:
         return {"ok": False, "error": str(e)}
     except Exception as e:
-        return {"ok": False, "error": f"PDF 파싱 오류: {e}"}
-
-    chunks = _filter_troubleshoot_chunks(pages, device_name, model_name)
-    if not chunks:
-        return {
-            "ok": False,
-            "error": (
-                "문제 해결·오류 코드 관련 내용을 찾을 수 없습니다. "
-                "파일에 Troubleshooting / Error Code / 문제 해결 섹션이 포함되어 있는지 확인하세요."
-            ),
-            "pages_processed": len(pages),
-            "ocr_used": ocr_used,
-        }
+        return {"ok": False, "error": f"파일 파싱 오류: {e}"}
 
     key = _device_key(device_name, model_name) or "default"
-    _user_docs[key] = chunks    # 해당 장비/모델 업로드 대체 (다른 장비는 보존)
-    _doc_embeddings = None      # 캐시 무효화 → 다음 질문 시 재임베딩
-    _save_user_docs()           # 디스크에 영구 저장
+    _user_docs[key] = chunks
+    _doc_embeddings = None
+    _save_user_docs()
 
     s = _get_session(request)
     if s:
