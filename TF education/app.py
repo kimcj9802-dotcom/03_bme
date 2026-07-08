@@ -132,6 +132,22 @@ def _save_reset_requests() -> None:
 
 _reset_requests: list[dict] = _load_reset_requests()
 
+# ── 매뉴얼 삭제 요청 (디스크 영속) ──────────────────────────────────
+_DOC_DELETE_FILE = _DATA_DIR / "doc_delete_requests.json"
+
+def _load_doc_delete_requests() -> list:
+    try:
+        return json.loads(_DOC_DELETE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+def _save_doc_delete_requests() -> None:
+    _DOC_DELETE_FILE.write_text(
+        json.dumps(_doc_delete_requests, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+_doc_delete_requests: list[dict] = _load_doc_delete_requests()
+
 # ── 활동 로그 (인메모리, 서버 재시작 시 초기화) ──────────────────────
 _activity_log: list[dict] = []
 _MAX_LOG = 500
@@ -1150,6 +1166,70 @@ async def dismiss_reset_request(admin_id: str, request: Request):
     return {"ok": True}
 
 
+# ── 매뉴얼 삭제 요청 API ─────────────────────────────────────────────
+
+@app.post("/api/admin/request-delete-doc")
+async def request_delete_doc(request: Request):
+    s = _require_admin(request)
+    body = await request.json()
+    device_name = body.get("device_name", "").strip()
+    model_name  = body.get("model_name",  "").strip()
+    if not device_name:
+        raise HTTPException(400, "장비명이 필요합니다.")
+    admin_id = s["admin_id"]
+    name = _admin_store.get(admin_id, {}).get("name", "")
+    global _doc_delete_requests
+    for r in _doc_delete_requests:
+        if r["device_name"] == device_name and r["model_name"] == model_name:
+            return {"ok": False, "error": "이미 동일한 삭제 요청이 접수되어 있습니다."}
+    _doc_delete_requests.append({
+        "id":           str(_uuid.uuid4()),
+        "device_name":  device_name,
+        "model_name":   model_name,
+        "admin_id":     admin_id,
+        "admin_name":   name,
+        "requested_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    _save_doc_delete_requests()
+    _log_activity(s, "자료 업로드", "매뉴얼 삭제 요청", f"{device_name} {model_name}".strip())
+    return {"ok": True, "message": "삭제 요청이 접수되었습니다. 마스터 관리자의 검토 후 삭제됩니다."}
+
+
+@app.get("/api/admin/doc-delete-requests")
+async def get_doc_delete_requests(request: Request):
+    _require_master(request)
+    return {"ok": True, "requests": _doc_delete_requests}
+
+
+@app.post("/api/admin/approve-delete-doc/{request_id}")
+async def approve_delete_doc(request_id: str, request: Request):
+    s = _require_master(request)
+    global _doc_delete_requests, _user_docs, _doc_embeddings
+    req = next((r for r in _doc_delete_requests if r["id"] == request_id), None)
+    if not req:
+        raise HTTPException(404, "요청을 찾을 수 없습니다.")
+    device_name = req["device_name"]
+    model_name  = req["model_name"]
+    key = _device_key(device_name, model_name)
+    _user_docs.pop(key, None)
+    _doc_embeddings = None
+    _save_user_docs()
+    _doc_delete_requests = [r for r in _doc_delete_requests if r["id"] != request_id]
+    _save_doc_delete_requests()
+    dev_label = " ".join(filter(None, [device_name, model_name]))
+    _log_activity(s, "설정", "매뉴얼 삭제 승인", dev_label)
+    return {"ok": True, "message": f"'{dev_label}' 자료가 삭제되었습니다."}
+
+
+@app.delete("/api/admin/doc-delete-requests/{request_id}")
+async def dismiss_doc_delete_request(request_id: str, request: Request):
+    _require_master(request)
+    global _doc_delete_requests
+    _doc_delete_requests = [r for r in _doc_delete_requests if r["id"] != request_id]
+    _save_doc_delete_requests()
+    return {"ok": True}
+
+
 # ── PDF 파싱 헬퍼 ─────────────────────────────────────────────────────
 def _page_to_text_ocr(page) -> str:
     """pymupdf 페이지 → 텍스트. 스캔본이면 OCR 시도."""
@@ -1385,9 +1465,12 @@ async def reset_docs(
     device_name: str = Form(""),
     model_name:  str = Form(""),
 ):
-    """업로드 자료 초기화. 장비/모델 지정 시 해당 것만, 미지정 시 전체."""
-    if not _get_session(request):
+    """업로드 자료 초기화. 마스터 전용. 장비/모델 지정 시 해당 것만, 미지정 시 전체."""
+    s = _get_session(request)
+    if not s:
         return {"ok": False, "error": "관리자 로그인이 필요합니다."}
+    if s.get("role") != "master":
+        return {"ok": False, "error": "마스터 관리자만 자료를 삭제할 수 있습니다."}
     global _user_docs, _doc_embeddings
     key = _device_key(device_name, model_name)
     if key.strip("|"):
@@ -1397,11 +1480,9 @@ async def reset_docs(
         _user_docs.clear()
         msg = "모든 업로드 자료가 초기화되었습니다."
     _doc_embeddings = None
-    _save_user_docs()           # 디스크에 반영
-    s = _get_session(request)
-    if s:
-        dev_label = " ".join(filter(None, [device_name, model_name])) or "전체"
-        _log_activity(s, "자료 업로드", "자료 삭제", dev_label)
+    _save_user_docs()
+    dev_label = " ".join(filter(None, [device_name, model_name])) or "전체"
+    _log_activity(s, "자료 업로드", "자료 삭제", dev_label)
     return {"ok": True, "message": msg}
 
 

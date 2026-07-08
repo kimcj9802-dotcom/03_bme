@@ -179,6 +179,8 @@
   #upload-btn:hover:not(:disabled) { background: #154360; }
   #reset-docs-btn { margin-top: 8px; background: #6c757d; font-size: .85rem; padding: 9px; }
   #reset-docs-btn:hover:not(:disabled) { background: #545b62; }
+  .docs-del-btn.req-btn { background: #a04000; }
+  .docs-del-btn.req-btn:hover { background: #7a3000; }
   #upload-status { margin-top: 14px; font-size: .85rem; line-height: 1.6; }
   #upload-status.ok   { color: #1a6b3a; }
   #upload-status.err  { color: #c00; }
@@ -566,6 +568,15 @@
       <div id="reset-requests-list"><div class="no-reset-req">요청 없음</div></div>
     </div>
 
+    <!-- 📂 매뉴얼 삭제 요청 (마스터 전용) -->
+    <div class="card master-only reset-req-card" id="doc-delete-requests-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="card-label" style="margin-bottom:0;color:#1a5276;">📂 매뉴얼 삭제 요청</div>
+        <button onclick="loadDocDeleteRequests()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
+      </div>
+      <div id="doc-delete-requests-list"><div class="no-reset-req">요청 없음</div></div>
+    </div>
+
     <!-- ① 관리자 현황 (마스터 전용) -->
     <div class="card master-only">
       <div class="card-label">👥 관리자 현황</div>
@@ -727,8 +738,9 @@
                   <span>└ ${m.model_name || "(공통)"}</span>
                   <span class="docs-chunk-badge">${m.chunk_count ?? 0}개 조각</span>
                 </div>
-                <button class="docs-del-btn"
-                  onclick="deleteDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">삭제</button>
+                <button class="docs-del-btn${adminRole !== 'master' ? ' req-btn' : ''}"
+                  onclick="deleteDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">
+                  ${adminRole !== 'master' ? '삭제 요청' : '삭제'}</button>
               </div>`).join("")}
           </div>
         </div>`;
@@ -744,20 +756,40 @@
   }
 
   async function deleteDoc(deviceName, modelName) {
-    if (!confirm(`"${deviceName} / ${modelName || '(공통)'}" 자료를 삭제할까요?`)) return;
-    const fd = new FormData();
-    fd.append("device_name", deviceName);
-    fd.append("model_name",  modelName);
-    try {
-      const res  = await fetch(BE + "/api/reset-docs", {
-        method: "POST", body: fd,
-        headers: { "X-Admin-Token": adminToken },
-      });
-      const data = await res.json();
-      setUploadStatus("ok", `✅ ${data.message}`);
-      await loadDeviceList();
-    } catch (err) {
-      setUploadStatus("err", `❌ ${err.message}`);
+    if (adminRole === "master") {
+      if (!confirm(`"${deviceName} / ${modelName || '(공통)'}" 자료를 삭제할까요?`)) return;
+      const fd = new FormData();
+      fd.append("device_name", deviceName);
+      fd.append("model_name",  modelName);
+      try {
+        const res  = await fetch(BE + "/api/reset-docs", {
+          method: "POST", body: fd,
+          headers: { "X-Admin-Token": adminToken },
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setUploadStatus("ok", `✅ ${data.message}`);
+          await loadDeviceList();
+        } else {
+          setUploadStatus("err", `❌ ${data.error}`);
+        }
+      } catch (err) {
+        setUploadStatus("err", `❌ ${err.message}`);
+      }
+    } else {
+      if (!confirm(`"${deviceName} / ${modelName || '(공통)'}" 자료 삭제를 마스터 관리자에게 요청할까요?`)) return;
+      try {
+        const res  = await fetch(BE + "/api/admin/request-delete-doc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
+          body: JSON.stringify({ device_name: deviceName, model_name: modelName }),
+        });
+        const data = await res.json();
+        if (data.ok) setUploadStatus("ok", `✅ ${data.message}`);
+        else          setUploadStatus("err", `❌ ${data.error}`);
+      } catch (err) {
+        setUploadStatus("err", `❌ ${err.message}`);
+      }
     }
   }
 
@@ -819,7 +851,7 @@
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("panel-active"));
     document.getElementById("tab-"    + tab).classList.add("tab-active");
     document.getElementById("panel-" + tab).classList.add("panel-active");
-    if (tab === "settings" && adminRole === "master") { loadUserList(); loadResetRequests(); loadActivityLog(); }
+    if (tab === "settings" && adminRole === "master") { loadUserList(); loadResetRequests(); loadDocDeleteRequests(); loadActivityLog(); }
   }
 
   // ── 관리자 권한 ──────────────────────────────────────────────────────
@@ -842,9 +874,10 @@
       document.getElementById("btn-vibe").classList.remove("t-active");
       document.getElementById("mode-desc").textContent = "검색 + 출처 표시";
       if (activeTab !== "failure") switchTab("failure");
-      _updateSettingsTabBadge(0);
+      _pendingResetCount = 0; _pendingDocDeleteCount = 0; _refreshBadge();
     } else if (role === "master") {
-      loadResetRequests();   // 로그인 직후 배지 반영
+      loadResetRequests();        // 로그인 직후 배지 반영
+      loadDocDeleteRequests();
     }
   }
   async function doLogout() {
@@ -1462,7 +1495,10 @@
     } catch { msg.style.color = "#c00"; msg.textContent = "서버 오류"; }
   }
 
-  // ── 초기화 요청 목록 (마스터) ────────────────────────────────────────
+  // ── 설정 탭 배지 (비밀번호 초기화 + 매뉴얼 삭제 요청 합산) ─────────
+  let _pendingResetCount = 0;
+  let _pendingDocDeleteCount = 0;
+
   function _updateSettingsTabBadge(count) {
     const btn = document.getElementById("tab-settings");
     if (!btn) return;
@@ -1476,6 +1512,11 @@
     }
   }
 
+  function _refreshBadge() {
+    _updateSettingsTabBadge(_pendingResetCount + _pendingDocDeleteCount);
+  }
+
+  // ── 비밀번호 초기화 요청 목록 (마스터) ──────────────────────────────
   async function loadResetRequests() {
     const wrap = document.getElementById("reset-requests-list");
     if (!wrap) return;
@@ -1485,7 +1526,8 @@
       });
       const data = await res.json();
       if (!data.ok) { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">불러오기 실패</div>`; return; }
-      _updateSettingsTabBadge(data.requests.length);
+      _pendingResetCount = data.requests.length;
+      _refreshBadge();
       if (!data.requests.length) {
         wrap.innerHTML = `<div class="no-reset-req">요청 없음</div>`;
         return;
@@ -1525,6 +1567,62 @@
       });
       const data = await res.json();
       if (data.ok) await loadResetRequests();
+      else alert(data.error || "오류");
+    } catch { alert("서버 오류"); }
+  }
+
+  // ── 매뉴얼 삭제 요청 목록 (마스터) ──────────────────────────────────
+  async function loadDocDeleteRequests() {
+    const wrap = document.getElementById("doc-delete-requests-list");
+    if (!wrap) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/doc-delete-requests`, {
+        headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (!data.ok) { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">불러오기 실패</div>`; return; }
+      _pendingDocDeleteCount = data.requests.length;
+      _refreshBadge();
+      if (!data.requests.length) {
+        wrap.innerHTML = `<div class="no-reset-req">요청 없음</div>`;
+        return;
+      }
+      wrap.innerHTML = data.requests.map(r => `
+        <div class="reset-req-row">
+          <div class="reset-req-info">
+            <strong>${r.device_name}</strong>${r.model_name ? ` / ${r.model_name}` : ""}
+            <span style="color:#555;font-size:.74rem;margin-left:6px;">요청: ${r.admin_name || r.admin_id}</span>
+            <span style="color:#888;font-size:.74rem;margin-left:6px;">${r.requested_at}</span>
+          </div>
+          <div class="reset-req-actions">
+            <button class="reset-btn-do"   onclick="approveDeleteDoc('${r.id}','${r.device_name.replace(/'/g,"\\'")}','${(r.model_name||'').replace(/'/g,"\\'")}')">삭제 승인</button>
+            <button class="reset-btn-skip" onclick="dismissDocDeleteRequest('${r.id}')">무시</button>
+          </div>
+        </div>`).join("");
+    } catch { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">서버 오류</div>`; }
+  }
+
+  async function approveDeleteDoc(requestId, deviceName, modelName) {
+    if (!confirm(`"${deviceName} / ${modelName || '(공통)'}" 자료를 삭제할까요?`)) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/approve-delete-doc/${encodeURIComponent(requestId)}`, {
+        method: "POST", headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert(`✅ ${data.message}`);
+        await loadDocDeleteRequests();
+      } else { alert(data.error || "삭제 실패"); }
+    } catch { alert("서버 오류"); }
+  }
+
+  async function dismissDocDeleteRequest(requestId) {
+    try {
+      const res  = await fetch(`${BE}/api/admin/doc-delete-requests/${encodeURIComponent(requestId)}`, {
+        method: "DELETE", headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (data.ok) await loadDocDeleteRequests();
       else alert(data.error || "오류");
     } catch { alert("서버 오류"); }
   }
