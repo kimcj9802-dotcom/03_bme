@@ -13,6 +13,7 @@ import numpy as np
 import os
 import uuid as _uuid
 import logging
+from datetime import datetime
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -32,6 +33,12 @@ try:
     _FITZ_OK = True
 except ImportError:
     _FITZ_OK = False
+
+try:
+    from docx import Document as _DocxDocument   # python-docx — Word 텍스트 추출
+    _DOCX_OK = True
+except ImportError:
+    _DOCX_OK = False
 
 try:
     import pytesseract   # OCR (선택 — 없어도 동작)
@@ -97,7 +104,7 @@ def _load_admins() -> dict[str, dict]:
             return json.loads(_ADMIN_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return {"2022137": {"password": "admin1234", "role": "master"}}
+    return {"2022137": {"password": "admin1234", "role": "master", "name": "김창진"}}
 
 def _save_admins() -> None:
     _ADMIN_FILE.write_text(
@@ -106,6 +113,60 @@ def _save_admins() -> None:
 
 _admin_store: dict[str, dict] = _load_admins()
 _admin_sessions: dict[str, dict] = {}  # {token: {admin_id, role}}
+
+# ── 비밀번호 초기화 요청 (파일 영구 저장) ────────────────────────────
+_RESET_FILE = _DATA_DIR / "reset_requests.json"
+
+def _load_reset_requests() -> list[dict]:
+    if _RESET_FILE.exists():
+        try:
+            return json.loads(_RESET_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
+
+def _save_reset_requests() -> None:
+    _RESET_FILE.write_text(
+        json.dumps(_reset_requests, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+_reset_requests: list[dict] = _load_reset_requests()
+
+# ── 매뉴얼 삭제 요청 (디스크 영속) ──────────────────────────────────
+_DOC_DELETE_FILE = _DATA_DIR / "doc_delete_requests.json"
+
+def _load_doc_delete_requests() -> list:
+    try:
+        return json.loads(_DOC_DELETE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+def _save_doc_delete_requests() -> None:
+    _DOC_DELETE_FILE.write_text(
+        json.dumps(_doc_delete_requests, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+_doc_delete_requests: list[dict] = _load_doc_delete_requests()
+
+# ── 활동 로그 (인메모리, 서버 재시작 시 초기화) ──────────────────────
+_activity_log: list[dict] = []
+_MAX_LOG = 500
+
+def _log_activity(session: dict, tab: str, action: str, detail: str = "") -> None:
+    aid  = session.get("admin_id", "?")
+    name = _admin_store.get(aid, {}).get("name", "")
+    entry = {
+        "ts":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "admin_id": aid,
+        "name":     name,
+        "tab":      tab,
+        "action":   action,
+        "detail":   detail,
+    }
+    _activity_log.append(entry)
+    if len(_activity_log) > _MAX_LOG:
+        _activity_log.pop(0)
+    logger.info("[활동] %s(%s) — %s / %s %s", aid, name, tab, action, detail)
 
 def _get_session(request: Request) -> dict | None:
     return _admin_sessions.get(request.headers.get("X-Admin-Token", ""))
@@ -475,10 +536,19 @@ class AdminLoginRequest(BaseModel):
 
 class AddAdminRequest(BaseModel):
     admin_id: str
+    name: str = ""
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+class LogActivityRequest(BaseModel):
+    tab:    str
+    action: str
+    detail: str = ""
+
+class ResetRequestBody(BaseModel):
+    admin_id: str
 
 
 # ── 스트리밍 헬퍼 ─────────────────────────────────────────────────────
@@ -970,7 +1040,7 @@ async def admin_logout(request: Request):
 async def list_admin_users(request: Request):
     _require_master(request)
     users = [
-        {"admin_id": aid, "role": d["role"]}
+        {"admin_id": aid, "role": d["role"], "name": d.get("name", "")}
         for aid, d in sorted(_admin_store.items())
     ]
     return {"ok": True, "users": users}
@@ -978,15 +1048,16 @@ async def list_admin_users(request: Request):
 
 @app.post("/api/admin/users/add")
 async def add_admin_user(req: AddAdminRequest, request: Request):
-    _require_master(request)
-    aid = req.admin_id.strip()
+    s = _require_master(request)
+    aid  = req.admin_id.strip()
+    name = req.name.strip()
     if not aid:
         return {"ok": False, "error": "사번을 입력해 주세요."}
     if aid in _admin_store:
         return {"ok": False, "error": f"이미 등록된 사번입니다: {aid}"}
-    _admin_store[aid] = {"password": "admin1234", "role": "admin"}
+    _admin_store[aid] = {"password": "admin1234", "role": "admin", "name": name}
     _save_admins()
-    logger.info("관리자 추가: %s", aid)
+    _log_activity(s, "설정", "관리자 등록", f"{aid} ({name}) 등록")
     return {"ok": True}
 
 
@@ -1000,11 +1071,12 @@ async def delete_admin_user(admin_id: str, request: Request):
         return {"ok": False, "error": "존재하지 않는 사번입니다."}
     if acc.get("role") == "master":
         return {"ok": False, "error": "마스터 계정은 삭제할 수 없습니다."}
+    del_name = acc.get("name", "")
     del _admin_store[admin_id]
     for t in [t for t, sv in list(_admin_sessions.items()) if sv["admin_id"] == admin_id]:
         del _admin_sessions[t]
     _save_admins()
-    logger.info("관리자 삭제: %s", admin_id)
+    _log_activity(s, "설정", "관리자 삭제", f"{admin_id} ({del_name}) 삭제")
     return {"ok": True}
 
 
@@ -1020,7 +1092,141 @@ async def change_password_api(req: ChangePasswordRequest, request: Request):
         return {"ok": False, "error": "새 비밀번호는 6자 이상이어야 합니다."}
     _admin_store[s["admin_id"]]["password"] = req.new_password
     _save_admins()
-    logger.info("비밀번호 변경: %s", s["admin_id"])
+    _log_activity(s, "설정", "비밀번호 변경", "")
+    return {"ok": True}
+
+
+@app.get("/api/admin/activity-log")
+async def get_activity_log(request: Request):
+    _require_master(request)
+    return {"ok": True, "log": list(reversed(_activity_log))}
+
+
+@app.post("/api/admin/log-activity")
+async def log_activity_api(req: LogActivityRequest, request: Request):
+    s = _get_session(request)
+    if not s:
+        return {"ok": False}
+    _log_activity(s, req.tab, req.action, req.detail)
+    return {"ok": True}
+
+
+# ── 비밀번호 초기화 요청 API ──────────────────────────────────────────
+@app.post("/api/admin/request-reset")
+async def request_password_reset(req: ResetRequestBody):
+    """로그인 없이 누구나 호출 가능 — 사번 존재 여부만 확인."""
+    aid = req.admin_id.strip()
+    if aid not in _admin_store:
+        return {"ok": False, "error": "등록되지 않은 사번입니다."}
+    if _admin_store[aid].get("role") == "master":
+        return {"ok": False, "error": "마스터 계정은 초기화 요청을 사용할 수 없습니다."}
+    if any(r["admin_id"] == aid for r in _reset_requests):
+        return {"ok": True, "message": "이미 초기화 요청이 접수되어 있습니다. 마스터 관리자에게 문의하세요."}
+    name = _admin_store[aid].get("name", "")
+    _reset_requests.append({
+        "admin_id": aid,
+        "name":     name,
+        "requested_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    _save_reset_requests()
+    logger.info("비밀번호 초기화 요청: %s (%s)", aid, name)
+    return {"ok": True, "message": "초기화 요청이 접수되었습니다. 마스터 관리자에게 문의하세요."}
+
+
+@app.get("/api/admin/reset-requests")
+async def get_reset_requests(request: Request):
+    _require_master(request)
+    return {"ok": True, "requests": _reset_requests}
+
+
+@app.post("/api/admin/reset-password/{admin_id}")
+async def reset_admin_password(admin_id: str, request: Request):
+    s = _require_master(request)
+    acc = _admin_store.get(admin_id)
+    if not acc:
+        return {"ok": False, "error": "존재하지 않는 사번입니다."}
+    if acc.get("role") == "master":
+        return {"ok": False, "error": "마스터 계정은 초기화할 수 없습니다."}
+    _admin_store[admin_id]["password"] = "admin1234"
+    _save_admins()
+    global _reset_requests
+    _reset_requests = [r for r in _reset_requests if r["admin_id"] != admin_id]
+    _save_reset_requests()
+    name = acc.get("name", "")
+    _log_activity(s, "설정", "비밀번호 초기화", f"{admin_id} ({name}) → admin1234")
+    return {"ok": True}
+
+
+@app.delete("/api/admin/reset-requests/{admin_id}")
+async def dismiss_reset_request(admin_id: str, request: Request):
+    _require_master(request)
+    global _reset_requests
+    _reset_requests = [r for r in _reset_requests if r["admin_id"] != admin_id]
+    _save_reset_requests()
+    return {"ok": True}
+
+
+# ── 매뉴얼 삭제 요청 API ─────────────────────────────────────────────
+
+@app.post("/api/admin/request-delete-doc")
+async def request_delete_doc(request: Request):
+    s = _require_admin(request)
+    body = await request.json()
+    device_name = body.get("device_name", "").strip()
+    model_name  = body.get("model_name",  "").strip()
+    if not device_name:
+        raise HTTPException(400, "장비명이 필요합니다.")
+    admin_id = s["admin_id"]
+    name = _admin_store.get(admin_id, {}).get("name", "")
+    global _doc_delete_requests
+    for r in _doc_delete_requests:
+        if r["device_name"] == device_name and r["model_name"] == model_name:
+            return {"ok": False, "error": "이미 동일한 삭제 요청이 접수되어 있습니다."}
+    _doc_delete_requests.append({
+        "id":           str(_uuid.uuid4()),
+        "device_name":  device_name,
+        "model_name":   model_name,
+        "admin_id":     admin_id,
+        "admin_name":   name,
+        "requested_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    _save_doc_delete_requests()
+    _log_activity(s, "자료 업로드", "매뉴얼 삭제 요청", f"{device_name} {model_name}".strip())
+    return {"ok": True, "message": "삭제 요청이 접수되었습니다. 마스터 관리자의 검토 후 삭제됩니다."}
+
+
+@app.get("/api/admin/doc-delete-requests")
+async def get_doc_delete_requests(request: Request):
+    _require_master(request)
+    return {"ok": True, "requests": _doc_delete_requests}
+
+
+@app.post("/api/admin/approve-delete-doc/{request_id}")
+async def approve_delete_doc(request_id: str, request: Request):
+    s = _require_master(request)
+    global _doc_delete_requests, _user_docs, _doc_embeddings
+    req = next((r for r in _doc_delete_requests if r["id"] == request_id), None)
+    if not req:
+        raise HTTPException(404, "요청을 찾을 수 없습니다.")
+    device_name = req["device_name"]
+    model_name  = req["model_name"]
+    key = _device_key(device_name, model_name)
+    _user_docs.pop(key, None)
+    _doc_embeddings = None
+    _save_user_docs()
+    _doc_delete_requests = [r for r in _doc_delete_requests if r["id"] != request_id]
+    _save_doc_delete_requests()
+    dev_label = " ".join(filter(None, [device_name, model_name]))
+    _log_activity(s, "설정", "매뉴얼 삭제 승인", dev_label)
+    return {"ok": True, "message": f"'{dev_label}' 자료가 삭제되었습니다."}
+
+
+@app.delete("/api/admin/doc-delete-requests/{request_id}")
+async def dismiss_doc_delete_request(request_id: str, request: Request):
+    _require_master(request)
+    global _doc_delete_requests
+    _doc_delete_requests = [r for r in _doc_delete_requests if r["id"] != request_id]
+    _save_doc_delete_requests()
     return {"ok": True}
 
 
@@ -1057,6 +1263,90 @@ def _extract_pdf_pages(pdf_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
             pages.append((i, text))
     doc.close()
     return pages, ocr_used
+
+
+def _extract_docx_pages(docx_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
+    """DOCX 전체 단락을 (pseudo_page_num, text) 목록으로 반환."""
+    if not _DOCX_OK:
+        raise RuntimeError("python-docx 패키지가 없습니다: pip install python-docx")
+    doc = _DocxDocument(io.BytesIO(docx_bytes))
+    pages, page_num, bucket, buf_len = [], 1, [], 0
+    CHUNK = 600
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+        bucket.append(text)
+        buf_len += len(text)
+        if buf_len >= CHUNK:
+            pages.append((page_num, "\n\n".join(bucket)))
+            page_num += 1
+            bucket, buf_len = [], 0
+    if bucket:
+        pages.append((page_num, "\n\n".join(bucket)))
+    return pages, False
+
+
+def _extract_xlsx_pages(xlsx_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
+    """XLSX 시트별 셀 내용을 (pseudo_page_num, text) 목록으로 반환."""
+    if not _XLSX_OK:
+        raise RuntimeError("openpyxl 패키지가 없습니다: pip install openpyxl")
+    wb = _openpyxl.load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
+    pages, page_num = [], 1
+    CHUNK = 600
+    for sh_name in wb.sheetnames:
+        ws = wb[sh_name]
+        row_texts, bucket, buf_len = [], [], 0
+        for row in ws.iter_rows(values_only=True):
+            cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
+            if cells:
+                row_texts.append(" | ".join(cells))
+        for row_text in row_texts:
+            bucket.append(row_text)
+            buf_len += len(row_text)
+            if buf_len >= CHUNK:
+                pages.append((page_num, f"[시트: {sh_name}]\n" + "\n".join(bucket)))
+                page_num += 1
+                bucket, buf_len = [], 0
+        if bucket:
+            pages.append((page_num, f"[시트: {sh_name}]\n" + "\n".join(bucket)))
+            page_num += 1
+    wb.close()
+    return pages, False
+
+
+def _chunk_all_pages(
+    pages: list[tuple[int, str]],
+    device_name: str = "",
+    model_name: str = "",
+) -> list[str]:
+    """전체 페이지를 조각으로 추출 (필터 없음) — docx·xlsx 전용."""
+    tag_parts = []
+    if device_name: tag_parts.append(f"장비: {device_name}")
+    if model_name:  tag_parts.append(f"모델: {model_name}")
+    tag = " / ".join(tag_parts)
+    chunks = []
+    for page_num, text in pages:
+        if not text.strip():
+            continue
+        prefix = f"[{tag} — p.{page_num}]" if tag else f"[업로드 자료 p.{page_num}]"
+        if len(text) <= 800:
+            chunks.append(f"{prefix}\n{text}")
+            continue
+        paragraphs = re.split(r"\n{2,}", text)
+        bucket: list[str] = []
+        for para in paragraphs:
+            bucket.append(para)
+            if len("\n\n".join(bucket)) > 600:
+                chunk_text = "\n\n".join(bucket).strip()
+                if chunk_text:
+                    chunks.append(f"{prefix}\n{chunk_text}")
+                bucket = []
+        if bucket:
+            chunk_text = "\n\n".join(bucket).strip()
+            if chunk_text:
+                chunks.append(f"{prefix}\n{chunk_text}")
+    return chunks
 
 
 def _filter_troubleshoot_chunks(
@@ -1104,32 +1394,58 @@ async def upload_pdf(
     global _user_docs, _doc_embeddings
     if not _get_session(request):
         return {"ok": False, "error": "관리자 로그인이 필요합니다."}
-    if not file.filename.lower().endswith(".pdf"):
-        return {"ok": False, "error": "PDF 파일(.pdf)만 업로드 가능합니다."}
-    pdf_bytes = await file.read()
+
+    fname = file.filename.lower()
+    if fname.endswith(".pdf"):
+        ext = ".pdf"
+    elif fname.endswith(".docx"):
+        ext = ".docx"
+    elif fname.endswith(".xlsx"):
+        ext = ".xlsx"
+    else:
+        return {"ok": False, "error": "PDF(.pdf), Word(.docx), Excel(.xlsx) 파일만 업로드 가능합니다."}
+
+    raw_bytes = await file.read()
+    ocr_used  = False
     try:
-        pages, ocr_used = _extract_pdf_pages(pdf_bytes)
+        if ext == ".pdf":
+            pages, ocr_used = _extract_pdf_pages(raw_bytes)
+            chunks = _filter_troubleshoot_chunks(pages, device_name, model_name)
+            if not chunks:
+                return {
+                    "ok": False,
+                    "error": (
+                        "문제 해결·오류 코드 관련 내용을 찾을 수 없습니다. "
+                        "파일에 Troubleshooting / Error Code / 문제 해결 섹션이 포함되어 있는지 확인하세요."
+                    ),
+                    "pages_processed": len(pages),
+                    "ocr_used": ocr_used,
+                }
+        elif ext == ".docx":
+            pages, _ = _extract_docx_pages(raw_bytes)
+            chunks = _chunk_all_pages(pages, device_name, model_name)
+            if not chunks:
+                return {"ok": False, "error": "Word 문서에서 텍스트를 추출할 수 없습니다."}
+        else:  # .xlsx
+            pages, _ = _extract_xlsx_pages(raw_bytes)
+            chunks = _chunk_all_pages(pages, device_name, model_name)
+            if not chunks:
+                return {"ok": False, "error": "엑셀 파일에서 내용을 추출할 수 없습니다."}
     except RuntimeError as e:
         return {"ok": False, "error": str(e)}
     except Exception as e:
-        return {"ok": False, "error": f"PDF 파싱 오류: {e}"}
-
-    chunks = _filter_troubleshoot_chunks(pages, device_name, model_name)
-    if not chunks:
-        return {
-            "ok": False,
-            "error": (
-                "문제 해결·오류 코드 관련 내용을 찾을 수 없습니다. "
-                "파일에 Troubleshooting / Error Code / 문제 해결 섹션이 포함되어 있는지 확인하세요."
-            ),
-            "pages_processed": len(pages),
-            "ocr_used": ocr_used,
-        }
+        return {"ok": False, "error": f"파일 파싱 오류: {e}"}
 
     key = _device_key(device_name, model_name) or "default"
-    _user_docs[key] = chunks    # 해당 장비/모델 업로드 대체 (다른 장비는 보존)
-    _doc_embeddings = None      # 캐시 무효화 → 다음 질문 시 재임베딩
-    _save_user_docs()           # 디스크에 영구 저장
+    _user_docs[key] = chunks
+    _doc_embeddings = None
+    _save_user_docs()
+
+    s = _get_session(request)
+    if s:
+        dev_label = " ".join(filter(None, [device_name, model_name]))
+        _log_activity(s, "자료 업로드", "매뉴얼 업로드",
+                      f"{dev_label} / {file.filename} ({len(chunks)}개 조각)")
 
     return {
         "ok": True,
@@ -1149,9 +1465,12 @@ async def reset_docs(
     device_name: str = Form(""),
     model_name:  str = Form(""),
 ):
-    """업로드 자료 초기화. 장비/모델 지정 시 해당 것만, 미지정 시 전체."""
-    if not _get_session(request):
+    """업로드 자료 초기화. 마스터 전용. 장비/모델 지정 시 해당 것만, 미지정 시 전체."""
+    s = _get_session(request)
+    if not s:
         return {"ok": False, "error": "관리자 로그인이 필요합니다."}
+    if s.get("role") != "master":
+        return {"ok": False, "error": "마스터 관리자만 자료를 삭제할 수 있습니다."}
     global _user_docs, _doc_embeddings
     key = _device_key(device_name, model_name)
     if key.strip("|"):
@@ -1161,7 +1480,9 @@ async def reset_docs(
         _user_docs.clear()
         msg = "모든 업로드 자료가 초기화되었습니다."
     _doc_embeddings = None
-    _save_user_docs()           # 디스크에 반영
+    _save_user_docs()
+    dev_label = " ".join(filter(None, [device_name, model_name])) or "전체"
+    _log_activity(s, "자료 업로드", "자료 삭제", dev_label)
     return {"ok": True, "message": msg}
 
 

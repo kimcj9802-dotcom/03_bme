@@ -179,6 +179,8 @@
   #upload-btn:hover:not(:disabled) { background: #154360; }
   #reset-docs-btn { margin-top: 8px; background: #6c757d; font-size: .85rem; padding: 9px; }
   #reset-docs-btn:hover:not(:disabled) { background: #545b62; }
+  .docs-del-btn.req-btn { background: #a04000; }
+  .docs-del-btn.req-btn:hover { background: #7a3000; }
   #upload-status { margin-top: 14px; font-size: .85rem; line-height: 1.6; }
   #upload-status.ok   { color: #1a6b3a; }
   #upload-status.err  { color: #c00; }
@@ -222,6 +224,34 @@
   .pw-change-form input { font-size: .88rem; }
   .pw-change-form button { width: auto; align-self: flex-start; padding: 8px 18px; font-size: .88rem; }
   .pw-change-msg { font-size: .78rem; min-height: 1.2em; }
+  /* ── 초기화 요청 알림 ── */
+  .reset-req-card { background: #fff8f0; border: 1.5px solid #e8a000; border-radius: 10px; }
+  .reset-req-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #fde8c0; font-size: .82rem; }
+  .reset-req-row:last-child { border-bottom: none; }
+  .reset-req-info { color: #333; }
+  .reset-req-actions { display: flex; gap: 6px; }
+  .reset-btn-do   { font-size: .72rem; padding: 3px 10px; background: #0d3b6e; color: #fff; border: none; border-radius: 6px; cursor: pointer; width: auto; }
+  .reset-btn-do:hover { background: #0a2f58; }
+  .reset-btn-skip { font-size: .72rem; padding: 3px 10px; background: #eee; color: #555; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; width: auto; }
+  .reset-btn-skip:hover { background: #ddd; }
+  .no-reset-req { font-size: .82rem; color: #aaa; text-align: center; padding: 14px 0; }
+  /* 탭 버튼 배지 */
+  .tab-badge { display: inline-block; background: #e03030; color: #fff; font-size: .62rem; font-weight: 700; border-radius: 8px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; line-height: 1.4; }
+  /* 모달 초기화 요청 모드 */
+  #modal-reset-section { display: none; }
+  #modal-reset-section.visible { display: block; }
+  #modal-login-section.hidden { display: none; }
+  .modal-link-btn { background: none; border: none; color: #1a5fad; font-size: .78rem; cursor: pointer; text-decoration: underline; padding: 0; width: auto; margin-top: 2px; }
+  .modal-link-btn:hover { color: #0d3b6e; }
+  /* ── 활동 로그 ── */
+  .log-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .log-table th { background: #eef3fb; color: #0d3b6e; font-weight: 700; padding: 6px 8px; text-align: left; white-space: nowrap; }
+  .log-table td { padding: 5px 8px; border-bottom: 1px solid #f0f3f8; color: #333; vertical-align: top; }
+  .log-table tr:last-child td { border-bottom: none; }
+  .log-table td:first-child { color: #888; white-space: nowrap; font-size: .72rem; }
+  .log-wrap { max-height: 340px; overflow-y: auto; border: 1px solid #e0e8f5; border-radius: 6px; }
+  /* ── 관리자 추가 2열 ── */
+  .add-admin-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 10px; align-items: start; }
 </style>
 </head>
 <body>
@@ -244,7 +274,7 @@
   <button class="tab-btn tab-active" id="tab-failure" onclick="switchTab('failure')">🔧 고장 대응</button>
   <button class="tab-btn tab-admin"  id="tab-recall"  onclick="switchTab('recall')">📋 리콜 확인</button>
   <button class="tab-btn tab-admin"  id="tab-upload"  onclick="switchTab('upload')">📁 자료 업로드</button>
-  <button class="tab-btn tab-master" id="tab-users"   onclick="switchTab('users')">👥 사용자 관리</button>
+  <button class="tab-btn tab-admin"  id="tab-settings" onclick="switchTab('settings')">⚙️ 설정</button>
 </nav>
 
 <main>
@@ -275,7 +305,7 @@
     <!-- 질문 + 오류 코드 검색 (하나의 카드) -->
     <div class="card">
       <!-- 바이브/하네스 토글 (관리자 전용) -->
-      <div class="mode-bar admin-only flex-display">
+      <div class="mode-bar master-only flex-display">
         <span class="mode-label">응답 모드:</span>
         <div class="toggle-wrap">
           <button class="t-vibe" id="btn-vibe" onclick="setMode(true)">⚡ 바이브</button>
@@ -488,9 +518,9 @@
         <small>스캔본(이미지 PDF)도 OCR로 자동 처리 · 문제 해결 / 오류 코드 섹션 자동 추출</small>
       </div>
       <div style="margin-top:8px;font-size:.75rem;color:#888;text-align:center;">
-        📎 업로드 가능 형식: <strong>PDF</strong> (.pdf)
+        📎 업로드 가능 형식: <strong>PDF</strong> (.pdf) &nbsp;·&nbsp; <strong>Word</strong> (.docx) &nbsp;·&nbsp; <strong>Excel</strong> (.xlsx)
       </div>
-      <input type="file" id="pdf-input" accept=".pdf" style="display:none" onchange="onFileSelected(this)" />
+      <input type="file" id="pdf-input" accept=".pdf,.docx,.xlsx" style="display:none" onchange="onFileSelected(this)" />
       <div id="selected-file" class="selected-file"></div>
 
       <button id="upload-btn" onclick="uploadPDF()" style="margin-top:12px;" disabled>업로드 및 파싱 시작</button>
@@ -526,15 +556,33 @@
     </div>
   </div>
 
-  <!-- ══ 사용자 관리 패널 (마스터 전용) ══ -->
-  <div id="panel-users" class="tab-panel">
+  <!-- ══ 설정 패널 (관리자 공통 / 사용자 관리 섹션은 마스터 전용) ══ -->
+  <div id="panel-settings" class="tab-panel">
 
-    <!-- ① 관리자 현황 -->
-    <div class="card">
+    <!-- ⓪ 비밀번호 초기화 요청 알림 (마스터 전용) -->
+    <div class="card master-only reset-req-card" id="reset-requests-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="card-label" style="margin-bottom:0;color:#b86000;">🔔 비밀번호 초기화 요청</div>
+        <button onclick="loadResetRequests()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
+      </div>
+      <div id="reset-requests-list"><div class="no-reset-req">요청 없음</div></div>
+    </div>
+
+    <!-- 📂 매뉴얼 삭제 요청 (마스터 전용) -->
+    <div class="card master-only reset-req-card" id="doc-delete-requests-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="card-label" style="margin-bottom:0;color:#1a5276;">📂 매뉴얼 삭제 요청</div>
+        <button onclick="loadDocDeleteRequests()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
+      </div>
+      <div id="doc-delete-requests-list"><div class="no-reset-req">요청 없음</div></div>
+    </div>
+
+    <!-- ① 관리자 현황 (마스터 전용) -->
+    <div class="card master-only">
       <div class="card-label">👥 관리자 현황</div>
       <div class="user-mgmt-section">
         <table class="admin-table" id="admin-user-table">
-          <thead><tr><th>사번</th><th>권한</th><th>삭제</th></tr></thead>
+          <thead><tr><th>사번</th><th>이름</th><th>권한</th><th>비밀번호</th><th>삭제</th></tr></thead>
           <tbody id="admin-user-tbody"><tr><td colspan="3" style="color:#aaa;text-align:center;padding:16px">불러오는 중…</td></tr></tbody>
         </table>
       </div>
@@ -542,10 +590,11 @@
       <!-- 관리자 추가 -->
       <div class="user-mgmt-section">
         <h3>➕ 관리자 추가</h3>
-        <p style="font-size:.82rem;color:#555;margin:0 0 8px">사번을 입력하면 초기 비밀번호 <code>admin1234</code>로 등록됩니다.</p>
-        <div class="add-admin-row">
-          <input id="new-admin-id" type="text" placeholder="사번 입력" />
-          <button onclick="addAdmin()">등록</button>
+        <p style="font-size:.82rem;color:#555;margin:0 0 8px">초기 비밀번호 <code>admin1234</code>로 등록됩니다.</p>
+        <div class="add-admin-grid">
+          <input id="new-admin-id"   type="text" placeholder="사번 입력" />
+          <input id="new-admin-name" type="text" placeholder="이름 입력" />
+          <button onclick="addAdmin()" style="padding:8px 16px;font-size:.88rem;white-space:nowrap;">등록</button>
         </div>
         <div id="add-admin-msg" class="pw-change-msg" style="margin-top:6px"></div>
       </div>
@@ -563,23 +612,56 @@
       </div>
     </div>
 
-  </div><!-- /panel-users -->
+    <!-- ③ 활동 로그 (마스터 전용) -->
+    <div class="card master-only">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="card-label" style="margin-bottom:0;">📋 활동 로그</div>
+        <button onclick="loadActivityLog()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
+      </div>
+      <p style="font-size:.78rem;color:#888;margin:0 0 10px">서버 재시작 시 초기화됩니다. 최근 500건까지 표시.</p>
+      <div class="log-wrap">
+        <table class="log-table">
+          <thead><tr><th>시각</th><th>사번 (이름)</th><th>탭</th><th>활동</th><th>상세</th></tr></thead>
+          <tbody id="activity-log-tbody"><tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">로그를 불러오는 중…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /panel-settings -->
 
 </main>
 
 <!-- ── 모달 ── -->
 <div id="modal-overlay">
   <div id="modal">
-    <h2>🔑 관리자 로그인</h2>
-    <p>사번과 비밀번호를 입력하면 리콜 확인, 자료 업로드 기능을 사용할 수 있습니다.</p>
-    <input id="modal-id" type="text" placeholder="사번 입력"
-           onkeydown="if(event.key==='Enter') document.getElementById('modal-pw').focus()" />
-    <input id="modal-pw" type="password" placeholder="비밀번호 입력"
-           onkeydown="if(event.key==='Enter') confirmAdmin()" />
-    <div id="modal-err"></div>
-    <div class="modal-btns">
-      <button id="modal-cancel" onclick="closeAdminModal()">취소</button>
-      <button id="modal-confirm" onclick="confirmAdmin()">로그인</button>
+    <!-- 로그인 모드 -->
+    <div id="modal-login-section">
+      <h2>🔑 관리자 로그인</h2>
+      <p>사번과 비밀번호를 입력하면 리콜 확인, 자료 업로드 기능을 사용할 수 있습니다.</p>
+      <input id="modal-id" type="text" placeholder="사번 입력"
+             onkeydown="if(event.key==='Enter') document.getElementById('modal-pw').focus()" />
+      <input id="modal-pw" type="password" placeholder="비밀번호 입력"
+             onkeydown="if(event.key==='Enter') confirmAdmin()" />
+      <div id="modal-err"></div>
+      <div class="modal-btns">
+        <button id="modal-cancel" onclick="closeAdminModal()">취소</button>
+        <button id="modal-confirm" onclick="confirmAdmin()">로그인</button>
+      </div>
+      <div style="text-align:center;margin-top:6px;">
+        <button class="modal-link-btn" onclick="showResetMode()">비밀번호를 잊으셨나요?</button>
+      </div>
+    </div>
+    <!-- 초기화 요청 모드 -->
+    <div id="modal-reset-section">
+      <h2>🔓 비밀번호 초기화 요청</h2>
+      <p>사번을 입력하면 마스터 관리자에게 초기화 요청이 전달됩니다.</p>
+      <input id="modal-reset-id" type="text" placeholder="사번 입력"
+             onkeydown="if(event.key==='Enter') submitResetRequest()" />
+      <div id="modal-reset-msg" style="font-size:.78rem;min-height:1em;"></div>
+      <div class="modal-btns">
+        <button onclick="showLoginMode()" style="background:#eee;color:#444;">돌아가기</button>
+        <button onclick="submitResetRequest()">요청 전송</button>
+      </div>
     </div>
   </div>
 </div>
@@ -656,8 +738,9 @@
                   <span>└ ${m.model_name || "(공통)"}</span>
                   <span class="docs-chunk-badge">${m.chunk_count ?? 0}개 조각</span>
                 </div>
-                <button class="docs-del-btn"
-                  onclick="deleteDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">삭제</button>
+                <button class="docs-del-btn${adminRole !== 'master' ? ' req-btn' : ''}"
+                  onclick="deleteDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">
+                  ${adminRole !== 'master' ? '삭제 요청' : '삭제'}</button>
               </div>`).join("")}
           </div>
         </div>`;
@@ -673,20 +756,40 @@
   }
 
   async function deleteDoc(deviceName, modelName) {
-    if (!confirm(`"${deviceName} / ${modelName || '(공통)'}" 자료를 삭제할까요?`)) return;
-    const fd = new FormData();
-    fd.append("device_name", deviceName);
-    fd.append("model_name",  modelName);
-    try {
-      const res  = await fetch(BE + "/api/reset-docs", {
-        method: "POST", body: fd,
-        headers: { "X-Admin-Token": adminToken },
-      });
-      const data = await res.json();
-      setUploadStatus("ok", `✅ ${data.message}`);
-      await loadDeviceList();
-    } catch (err) {
-      setUploadStatus("err", `❌ ${err.message}`);
+    if (adminRole === "master") {
+      if (!confirm(`"${deviceName} / ${modelName || '(공통)'}" 자료를 삭제할까요?`)) return;
+      const fd = new FormData();
+      fd.append("device_name", deviceName);
+      fd.append("model_name",  modelName);
+      try {
+        const res  = await fetch(BE + "/api/reset-docs", {
+          method: "POST", body: fd,
+          headers: { "X-Admin-Token": adminToken },
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setUploadStatus("ok", `✅ ${data.message}`);
+          await loadDeviceList();
+        } else {
+          setUploadStatus("err", `❌ ${data.error}`);
+        }
+      } catch (err) {
+        setUploadStatus("err", `❌ ${err.message}`);
+      }
+    } else {
+      if (!confirm(`"${deviceName} / ${modelName || '(공통)'}" 자료 삭제를 마스터 관리자에게 요청할까요?`)) return;
+      try {
+        const res  = await fetch(BE + "/api/admin/request-delete-doc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
+          body: JSON.stringify({ device_name: deviceName, model_name: modelName }),
+        });
+        const data = await res.json();
+        if (data.ok) setUploadStatus("ok", `✅ ${data.message}`);
+        else          setUploadStatus("err", `❌ ${data.error}`);
+      } catch (err) {
+        setUploadStatus("err", `❌ ${err.message}`);
+      }
     }
   }
 
@@ -748,7 +851,7 @@
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("panel-active"));
     document.getElementById("tab-"    + tab).classList.add("tab-active");
     document.getElementById("panel-" + tab).classList.add("panel-active");
-    if (tab === "users") loadUserList();
+    if (tab === "settings" && adminRole === "master") { loadUserList(); loadResetRequests(); loadDocDeleteRequests(); loadActivityLog(); }
   }
 
   // ── 관리자 권한 ──────────────────────────────────────────────────────
@@ -771,6 +874,10 @@
       document.getElementById("btn-vibe").classList.remove("t-active");
       document.getElementById("mode-desc").textContent = "검색 + 출처 표시";
       if (activeTab !== "failure") switchTab("failure");
+      _pendingResetCount = 0; _pendingDocDeleteCount = 0; _refreshBadge();
+    } else if (role === "master") {
+      loadResetRequests();        // 로그인 직후 배지 반영
+      loadDocDeleteRequests();
     }
   }
   async function doLogout() {
@@ -833,7 +940,7 @@
     document.getElementById("sources-box").innerHTML = "";
   }
   function setMode(vibe) {
-    if (!adminRole) return;
+    if (adminRole !== "master") return;
     bareMode = vibe;
     document.getElementById("btn-vibe").classList.toggle("t-active",  vibe);
     document.getElementById("btn-harn").classList.toggle("t-active", !vibe);
@@ -847,7 +954,7 @@
     const model_name  = document.getElementById("model-name").value.trim();
     if (!question) { alert("질문을 입력해 주세요."); return; }
 
-    const useBare    = adminRole ? bareMode : false;
+    const useBare    = adminRole === "master" ? bareMode : false;
     const sourcesBox = document.getElementById("sources-box");
     sendBtn.disabled = true;
     answerBox.className = "streaming";
@@ -1162,6 +1269,11 @@
           + (filterDesc ? `<span style="color:#666;margin-left:8px;">(${filterDesc})</span>` : "")
           + `<br><span style="font-size:.8rem;color:#1a6b3a;">📌 캐시 저장됨 — 매칭 시 재조회 없이 즉시 사용됩니다.</span>`;
         st.style.color = "#1a6b3a";
+        fetch(`${BE}/api/admin/log-activity`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
+          body: JSON.stringify({ tab: "리콜 확인", action: "회수 목록 조회", detail: `${data.fetched}건 수신${filterDesc ? " / " + filterDesc : ""}` }),
+        }).catch(() => {});
         // 회수목록 데이터 저장 + 확인 버튼 노출
         recallListData = data.items || [];
         const viewBtn = document.getElementById("recall-view-btn");
@@ -1234,6 +1346,13 @@
       document.getElementById("rs-high").textContent    = data.high_count.toLocaleString();
       document.getElementById("rs-review").textContent  = data.review_count.toLocaleString();
 
+      fetch(`${BE}/api/admin/log-activity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
+        body: JSON.stringify({ tab: "리콜 확인", action: "병원 자산 매칭 분석",
+          detail: `${assetFile.name} / 자산 ${data.asset_count}건 · 높은가능성 ${data.high_count}건 · 검토필요 ${data.review_count}건` }),
+      }).catch(() => {});
+
       document.getElementById("recall-result-card").style.display = "block";
       switchRecallTab("high");
     } catch (e) {
@@ -1299,39 +1418,239 @@
         headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
-      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="3" style="color:#c00">${data.detail || "오류"}</td></tr>`; return; }
+      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">${data.detail || "오류"}</td></tr>`; return; }
       tbody.innerHTML = data.users.map(u => `
         <tr>
           <td>${u.admin_id}</td>
+          <td>${u.name || "—"}</td>
           <td><span class="role-badge ${u.role}">${u.role === "master" ? "마스터" : "관리자"}</span></td>
+          <td>${u.role === "master" ? "—" : `<button class="reset-btn-do" onclick="resetAdminPassword('${u.admin_id}')">초기화</button>`}</td>
           <td>${u.role === "master" ? "—" : `<button class="admin-del-btn" onclick="removeAdmin('${u.admin_id}')">삭제</button>`}</td>
         </tr>`).join("");
     } catch {
-      tbody.innerHTML = `<tr><td colspan="3" style="color:#c00">불러오기 실패</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" style="color:#c00">불러오기 실패</td></tr>`;
     }
   }
 
   async function addAdmin() {
-    const id  = document.getElementById("new-admin-id").value.trim();
-    const msg = document.getElementById("add-admin-msg");
-    if (!id) { msg.style.color = "#c00"; msg.textContent = "사번을 입력해 주세요."; return; }
+    const id   = document.getElementById("new-admin-id").value.trim();
+    const name = document.getElementById("new-admin-name").value.trim();
+    const msg  = document.getElementById("add-admin-msg");
+    if (!id)   { msg.style.color = "#c00"; msg.textContent = "사번을 입력해 주세요."; return; }
+    if (!name) { msg.style.color = "#c00"; msg.textContent = "이름을 입력해 주세요."; return; }
     msg.style.color = "#555"; msg.textContent = "등록 중…";
     try {
       const res  = await fetch(`${BE}/api/admin/users/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
-        body: JSON.stringify({ admin_id: id }),
+        body: JSON.stringify({ admin_id: id, name }),
       });
       const data = await res.json();
       if (data.ok) {
         msg.style.color = "#0a7a0a";
-        msg.textContent = `✅ 사번 ${id} 등록 완료 (초기 비밀번호: admin1234)`;
-        document.getElementById("new-admin-id").value = "";
+        msg.textContent = `✅ ${name} (${id}) 등록 완료 — 초기 비밀번호: admin1234`;
+        document.getElementById("new-admin-id").value   = "";
+        document.getElementById("new-admin-name").value = "";
         await loadUserList();
       } else {
         msg.style.color = "#c00"; msg.textContent = data.error || "등록 실패";
       }
     } catch { msg.style.color = "#c00"; msg.textContent = "서버 오류"; }
+  }
+
+  // ── 모달: 로그인 ↔ 초기화 요청 전환 ────────────────────────────────
+  function showResetMode() {
+    document.getElementById("modal-login-section").classList.add("hidden");
+    document.getElementById("modal-reset-section").classList.add("visible");
+    document.getElementById("modal-reset-id").value = "";
+    document.getElementById("modal-reset-msg").textContent = "";
+    setTimeout(() => document.getElementById("modal-reset-id").focus(), 80);
+  }
+  function showLoginMode() {
+    document.getElementById("modal-reset-section").classList.remove("visible");
+    document.getElementById("modal-login-section").classList.remove("hidden");
+    setTimeout(() => document.getElementById("modal-id").focus(), 80);
+  }
+
+  async function submitResetRequest() {
+    const id  = document.getElementById("modal-reset-id").value.trim();
+    const msg = document.getElementById("modal-reset-msg");
+    if (!id) { msg.style.color = "#c00"; msg.textContent = "사번을 입력해 주세요."; return; }
+    msg.style.color = "#555"; msg.textContent = "요청 중…";
+    try {
+      const res  = await fetch(`${BE}/api/admin/request-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_id: id }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        msg.style.color = "#0a7a0a";
+        msg.textContent = `✅ ${data.message}`;
+        document.getElementById("modal-reset-id").value = "";
+      } else {
+        msg.style.color = "#c00";
+        msg.textContent = data.error || "요청 실패";
+      }
+    } catch { msg.style.color = "#c00"; msg.textContent = "서버 오류"; }
+  }
+
+  // ── 설정 탭 배지 (비밀번호 초기화 + 매뉴얼 삭제 요청 합산) ─────────
+  let _pendingResetCount = 0;
+  let _pendingDocDeleteCount = 0;
+
+  function _updateSettingsTabBadge(count) {
+    const btn = document.getElementById("tab-settings");
+    if (!btn) return;
+    const existing = btn.querySelector(".tab-badge");
+    if (existing) existing.remove();
+    if (count > 0) {
+      const badge = document.createElement("span");
+      badge.className = "tab-badge";
+      badge.textContent = count;
+      btn.appendChild(badge);
+    }
+  }
+
+  function _refreshBadge() {
+    _updateSettingsTabBadge(_pendingResetCount + _pendingDocDeleteCount);
+  }
+
+  // ── 비밀번호 초기화 요청 목록 (마스터) ──────────────────────────────
+  async function loadResetRequests() {
+    const wrap = document.getElementById("reset-requests-list");
+    if (!wrap) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/reset-requests`, {
+        headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (!data.ok) { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">불러오기 실패</div>`; return; }
+      _pendingResetCount = data.requests.length;
+      _refreshBadge();
+      if (!data.requests.length) {
+        wrap.innerHTML = `<div class="no-reset-req">요청 없음</div>`;
+        return;
+      }
+      wrap.innerHTML = data.requests.map(r => `
+        <div class="reset-req-row">
+          <div class="reset-req-info">
+            <strong>${r.admin_id}</strong>${r.name ? ` (${r.name})` : ""}
+            <span style="color:#888;font-size:.74rem;margin-left:8px;">${r.requested_at}</span>
+          </div>
+          <div class="reset-req-actions">
+            <button class="reset-btn-do"   onclick="resetAdminPassword('${r.admin_id}')">초기화</button>
+            <button class="reset-btn-skip" onclick="dismissResetRequest('${r.admin_id}')">무시</button>
+          </div>
+        </div>`).join("");
+    } catch { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">서버 오류</div>`; }
+  }
+
+  async function resetAdminPassword(targetId) {
+    if (!confirm(`사번 ${targetId}의 비밀번호를 admin1234로 초기화할까요?`)) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/reset-password/${encodeURIComponent(targetId)}`, {
+        method: "POST", headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (data.ok) {
+        await loadResetRequests();
+        await loadUserList();
+      } else { alert(data.error || "초기화 실패"); }
+    } catch { alert("서버 오류"); }
+  }
+
+  async function dismissResetRequest(targetId) {
+    try {
+      const res  = await fetch(`${BE}/api/admin/reset-requests/${encodeURIComponent(targetId)}`, {
+        method: "DELETE", headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (data.ok) await loadResetRequests();
+      else alert(data.error || "오류");
+    } catch { alert("서버 오류"); }
+  }
+
+  // ── 매뉴얼 삭제 요청 목록 (마스터) ──────────────────────────────────
+  async function loadDocDeleteRequests() {
+    const wrap = document.getElementById("doc-delete-requests-list");
+    if (!wrap) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/doc-delete-requests`, {
+        headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (!data.ok) { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">불러오기 실패</div>`; return; }
+      _pendingDocDeleteCount = data.requests.length;
+      _refreshBadge();
+      if (!data.requests.length) {
+        wrap.innerHTML = `<div class="no-reset-req">요청 없음</div>`;
+        return;
+      }
+      wrap.innerHTML = data.requests.map(r => `
+        <div class="reset-req-row">
+          <div class="reset-req-info">
+            <strong>${r.device_name}</strong>${r.model_name ? ` / ${r.model_name}` : ""}
+            <span style="color:#555;font-size:.74rem;margin-left:6px;">요청: ${r.admin_name || r.admin_id}</span>
+            <span style="color:#888;font-size:.74rem;margin-left:6px;">${r.requested_at}</span>
+          </div>
+          <div class="reset-req-actions">
+            <button class="reset-btn-do"   onclick="approveDeleteDoc('${r.id}','${r.device_name.replace(/'/g,"\\'")}','${(r.model_name||'').replace(/'/g,"\\'")}')">삭제 승인</button>
+            <button class="reset-btn-skip" onclick="dismissDocDeleteRequest('${r.id}')">무시</button>
+          </div>
+        </div>`).join("");
+    } catch { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">서버 오류</div>`; }
+  }
+
+  async function approveDeleteDoc(requestId, deviceName, modelName) {
+    if (!confirm(`"${deviceName} / ${modelName || '(공통)'}" 자료를 삭제할까요?`)) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/approve-delete-doc/${encodeURIComponent(requestId)}`, {
+        method: "POST", headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert(`✅ ${data.message}`);
+        await loadDocDeleteRequests();
+      } else { alert(data.error || "삭제 실패"); }
+    } catch { alert("서버 오류"); }
+  }
+
+  async function dismissDocDeleteRequest(requestId) {
+    try {
+      const res  = await fetch(`${BE}/api/admin/doc-delete-requests/${encodeURIComponent(requestId)}`, {
+        method: "DELETE", headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (data.ok) await loadDocDeleteRequests();
+      else alert(data.error || "오류");
+    } catch { alert("서버 오류"); }
+  }
+
+  async function loadActivityLog() {
+    const tbody = document.getElementById("activity-log-tbody");
+    if (!tbody) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/activity-log`, {
+        headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">불러오기 실패</td></tr>`; return; }
+      if (!data.log.length) {
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">활동 기록이 없습니다.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = data.log.map(e => `
+        <tr>
+          <td>${e.ts}</td>
+          <td>${e.admin_id}${e.name ? ` (${e.name})` : ""}</td>
+          <td>${e.tab}</td>
+          <td>${e.action}</td>
+          <td style="color:#555">${e.detail || "—"}</td>
+        </tr>`).join("");
+    } catch {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">서버 오류</td></tr>`;
+    }
   }
 
   async function removeAdmin(adminId) {
