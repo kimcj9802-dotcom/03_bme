@@ -244,7 +244,7 @@
   <button class="tab-btn tab-active" id="tab-failure" onclick="switchTab('failure')">🔧 고장 대응</button>
   <button class="tab-btn tab-admin"  id="tab-recall"  onclick="switchTab('recall')">📋 리콜 확인</button>
   <button class="tab-btn tab-admin"  id="tab-upload"  onclick="switchTab('upload')">📁 자료 업로드</button>
-  <button class="tab-btn tab-master" id="tab-users"   onclick="switchTab('users')">👥 사용자 관리</button>
+  <button class="tab-btn tab-admin"  id="tab-settings" onclick="switchTab('settings')">⚙️ 설정</button>
 </nav>
 
 <main>
@@ -526,11 +526,11 @@
     </div>
   </div>
 
-  <!-- ══ 사용자 관리 패널 (마스터 전용) ══ -->
-  <div id="panel-users" class="tab-panel">
+  <!-- ══ 설정 패널 (관리자 공통 / 사용자 관리 섹션은 마스터 전용) ══ -->
+  <div id="panel-settings" class="tab-panel">
 
-    <!-- ① 관리자 현황 -->
-    <div class="card">
+    <!-- ① 관리자 현황 (마스터 전용) -->
+    <div class="card master-only">
       <div class="card-label">👥 관리자 현황</div>
       <div class="user-mgmt-section">
         <table class="admin-table" id="admin-user-table">
@@ -563,7 +563,7 @@
       </div>
     </div>
 
-  </div><!-- /panel-users -->
+  </div><!-- /panel-settings -->
 
 </main>
 
@@ -748,7 +748,7 @@
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("panel-active"));
     document.getElementById("tab-"    + tab).classList.add("tab-active");
     document.getElementById("panel-" + tab).classList.add("panel-active");
-    if (tab === "users") loadUserList();
+    if (tab === "settings" && adminRole === "master") loadUserList();
   }
 
   // ── 관리자 권한 ──────────────────────────────────────────────────────
