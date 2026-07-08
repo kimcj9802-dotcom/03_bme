@@ -13,6 +13,7 @@ import numpy as np
 import os
 import uuid as _uuid
 import logging
+from datetime import datetime
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -106,6 +107,26 @@ def _save_admins() -> None:
 
 _admin_store: dict[str, dict] = _load_admins()
 _admin_sessions: dict[str, dict] = {}  # {token: {admin_id, role}}
+
+# ── 활동 로그 (인메모리, 서버 재시작 시 초기화) ──────────────────────
+_activity_log: list[dict] = []
+_MAX_LOG = 500
+
+def _log_activity(session: dict, tab: str, action: str, detail: str = "") -> None:
+    aid  = session.get("admin_id", "?")
+    name = _admin_store.get(aid, {}).get("name", "")
+    entry = {
+        "ts":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "admin_id": aid,
+        "name":     name,
+        "tab":      tab,
+        "action":   action,
+        "detail":   detail,
+    }
+    _activity_log.append(entry)
+    if len(_activity_log) > _MAX_LOG:
+        _activity_log.pop(0)
+    logger.info("[활동] %s(%s) — %s / %s %s", aid, name, tab, action, detail)
 
 def _get_session(request: Request) -> dict | None:
     return _admin_sessions.get(request.headers.get("X-Admin-Token", ""))
@@ -475,10 +496,16 @@ class AdminLoginRequest(BaseModel):
 
 class AddAdminRequest(BaseModel):
     admin_id: str
+    name: str = ""
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+class LogActivityRequest(BaseModel):
+    tab:    str
+    action: str
+    detail: str = ""
 
 
 # ── 스트리밍 헬퍼 ─────────────────────────────────────────────────────
@@ -970,7 +997,7 @@ async def admin_logout(request: Request):
 async def list_admin_users(request: Request):
     _require_master(request)
     users = [
-        {"admin_id": aid, "role": d["role"]}
+        {"admin_id": aid, "role": d["role"], "name": d.get("name", "")}
         for aid, d in sorted(_admin_store.items())
     ]
     return {"ok": True, "users": users}
@@ -978,15 +1005,16 @@ async def list_admin_users(request: Request):
 
 @app.post("/api/admin/users/add")
 async def add_admin_user(req: AddAdminRequest, request: Request):
-    _require_master(request)
-    aid = req.admin_id.strip()
+    s = _require_master(request)
+    aid  = req.admin_id.strip()
+    name = req.name.strip()
     if not aid:
         return {"ok": False, "error": "사번을 입력해 주세요."}
     if aid in _admin_store:
         return {"ok": False, "error": f"이미 등록된 사번입니다: {aid}"}
-    _admin_store[aid] = {"password": "admin1234", "role": "admin"}
+    _admin_store[aid] = {"password": "admin1234", "role": "admin", "name": name}
     _save_admins()
-    logger.info("관리자 추가: %s", aid)
+    _log_activity(s, "설정", "관리자 등록", f"{aid} ({name}) 등록")
     return {"ok": True}
 
 
@@ -1000,11 +1028,12 @@ async def delete_admin_user(admin_id: str, request: Request):
         return {"ok": False, "error": "존재하지 않는 사번입니다."}
     if acc.get("role") == "master":
         return {"ok": False, "error": "마스터 계정은 삭제할 수 없습니다."}
+    del_name = acc.get("name", "")
     del _admin_store[admin_id]
     for t in [t for t, sv in list(_admin_sessions.items()) if sv["admin_id"] == admin_id]:
         del _admin_sessions[t]
     _save_admins()
-    logger.info("관리자 삭제: %s", admin_id)
+    _log_activity(s, "설정", "관리자 삭제", f"{admin_id} ({del_name}) 삭제")
     return {"ok": True}
 
 
@@ -1020,7 +1049,22 @@ async def change_password_api(req: ChangePasswordRequest, request: Request):
         return {"ok": False, "error": "새 비밀번호는 6자 이상이어야 합니다."}
     _admin_store[s["admin_id"]]["password"] = req.new_password
     _save_admins()
-    logger.info("비밀번호 변경: %s", s["admin_id"])
+    _log_activity(s, "설정", "비밀번호 변경", "")
+    return {"ok": True}
+
+
+@app.get("/api/admin/activity-log")
+async def get_activity_log(request: Request):
+    _require_master(request)
+    return {"ok": True, "log": list(reversed(_activity_log))}
+
+
+@app.post("/api/admin/log-activity")
+async def log_activity_api(req: LogActivityRequest, request: Request):
+    s = _get_session(request)
+    if not s:
+        return {"ok": False}
+    _log_activity(s, req.tab, req.action, req.detail)
     return {"ok": True}
 
 
@@ -1131,6 +1175,12 @@ async def upload_pdf(
     _doc_embeddings = None      # 캐시 무효화 → 다음 질문 시 재임베딩
     _save_user_docs()           # 디스크에 영구 저장
 
+    s = _get_session(request)
+    if s:
+        dev_label = " ".join(filter(None, [device_name, model_name]))
+        _log_activity(s, "자료 업로드", "매뉴얼 업로드",
+                      f"{dev_label} / {file.filename} ({len(chunks)}개 조각)")
+
     return {
         "ok": True,
         "filename": file.filename,
@@ -1162,6 +1212,10 @@ async def reset_docs(
         msg = "모든 업로드 자료가 초기화되었습니다."
     _doc_embeddings = None
     _save_user_docs()           # 디스크에 반영
+    s = _get_session(request)
+    if s:
+        dev_label = " ".join(filter(None, [device_name, model_name])) or "전체"
+        _log_activity(s, "자료 업로드", "자료 삭제", dev_label)
     return {"ok": True, "message": msg}
 
 

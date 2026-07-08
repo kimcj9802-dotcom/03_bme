@@ -222,6 +222,15 @@
   .pw-change-form input { font-size: .88rem; }
   .pw-change-form button { width: auto; align-self: flex-start; padding: 8px 18px; font-size: .88rem; }
   .pw-change-msg { font-size: .78rem; min-height: 1.2em; }
+  /* ── 활동 로그 ── */
+  .log-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .log-table th { background: #eef3fb; color: #0d3b6e; font-weight: 700; padding: 6px 8px; text-align: left; white-space: nowrap; }
+  .log-table td { padding: 5px 8px; border-bottom: 1px solid #f0f3f8; color: #333; vertical-align: top; }
+  .log-table tr:last-child td { border-bottom: none; }
+  .log-table td:first-child { color: #888; white-space: nowrap; font-size: .72rem; }
+  .log-wrap { max-height: 340px; overflow-y: auto; border: 1px solid #e0e8f5; border-radius: 6px; }
+  /* ── 관리자 추가 2열 ── */
+  .add-admin-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 10px; align-items: start; }
 </style>
 </head>
 <body>
@@ -534,7 +543,7 @@
       <div class="card-label">👥 관리자 현황</div>
       <div class="user-mgmt-section">
         <table class="admin-table" id="admin-user-table">
-          <thead><tr><th>사번</th><th>권한</th><th>삭제</th></tr></thead>
+          <thead><tr><th>사번</th><th>이름</th><th>권한</th><th>삭제</th></tr></thead>
           <tbody id="admin-user-tbody"><tr><td colspan="3" style="color:#aaa;text-align:center;padding:16px">불러오는 중…</td></tr></tbody>
         </table>
       </div>
@@ -542,10 +551,11 @@
       <!-- 관리자 추가 -->
       <div class="user-mgmt-section">
         <h3>➕ 관리자 추가</h3>
-        <p style="font-size:.82rem;color:#555;margin:0 0 8px">사번을 입력하면 초기 비밀번호 <code>admin1234</code>로 등록됩니다.</p>
-        <div class="add-admin-row">
-          <input id="new-admin-id" type="text" placeholder="사번 입력" />
-          <button onclick="addAdmin()">등록</button>
+        <p style="font-size:.82rem;color:#555;margin:0 0 8px">초기 비밀번호 <code>admin1234</code>로 등록됩니다.</p>
+        <div class="add-admin-grid">
+          <input id="new-admin-id"   type="text" placeholder="사번 입력" />
+          <input id="new-admin-name" type="text" placeholder="이름 입력" />
+          <button onclick="addAdmin()" style="padding:8px 16px;font-size:.88rem;white-space:nowrap;">등록</button>
         </div>
         <div id="add-admin-msg" class="pw-change-msg" style="margin-top:6px"></div>
       </div>
@@ -560,6 +570,21 @@
         <input id="pw-new2"    type="password" placeholder="새 비밀번호 확인" />
         <button onclick="changeMyPassword()">변경</button>
         <div id="pw-change-msg" class="pw-change-msg"></div>
+      </div>
+    </div>
+
+    <!-- ③ 활동 로그 (마스터 전용) -->
+    <div class="card master-only">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="card-label" style="margin-bottom:0;">📋 활동 로그</div>
+        <button onclick="loadActivityLog()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
+      </div>
+      <p style="font-size:.78rem;color:#888;margin:0 0 10px">서버 재시작 시 초기화됩니다. 최근 500건까지 표시.</p>
+      <div class="log-wrap">
+        <table class="log-table">
+          <thead><tr><th>시각</th><th>사번 (이름)</th><th>탭</th><th>활동</th><th>상세</th></tr></thead>
+          <tbody id="activity-log-tbody"><tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">로그를 불러오는 중…</td></tr></tbody>
+        </table>
       </div>
     </div>
 
@@ -748,7 +773,7 @@
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("panel-active"));
     document.getElementById("tab-"    + tab).classList.add("tab-active");
     document.getElementById("panel-" + tab).classList.add("panel-active");
-    if (tab === "settings" && adminRole === "master") loadUserList();
+    if (tab === "settings" && adminRole === "master") { loadUserList(); loadActivityLog(); }
   }
 
   // ── 관리자 권한 ──────────────────────────────────────────────────────
@@ -1162,6 +1187,11 @@
           + (filterDesc ? `<span style="color:#666;margin-left:8px;">(${filterDesc})</span>` : "")
           + `<br><span style="font-size:.8rem;color:#1a6b3a;">📌 캐시 저장됨 — 매칭 시 재조회 없이 즉시 사용됩니다.</span>`;
         st.style.color = "#1a6b3a";
+        fetch(`${BE}/api/admin/log-activity`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
+          body: JSON.stringify({ tab: "리콜 확인", action: "회수 목록 조회", detail: `${data.fetched}건 수신${filterDesc ? " / " + filterDesc : ""}` }),
+        }).catch(() => {});
         // 회수목록 데이터 저장 + 확인 버튼 노출
         recallListData = data.items || [];
         const viewBtn = document.getElementById("recall-view-btn");
@@ -1234,6 +1264,13 @@
       document.getElementById("rs-high").textContent    = data.high_count.toLocaleString();
       document.getElementById("rs-review").textContent  = data.review_count.toLocaleString();
 
+      fetch(`${BE}/api/admin/log-activity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
+        body: JSON.stringify({ tab: "리콜 확인", action: "병원 자산 매칭 분석",
+          detail: `${assetFile.name} / 자산 ${data.asset_count}건 · 높은가능성 ${data.high_count}건 · 검토필요 ${data.review_count}건` }),
+      }).catch(() => {});
+
       document.getElementById("recall-result-card").style.display = "block";
       switchRecallTab("high");
     } catch (e) {
@@ -1299,39 +1336,69 @@
         headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
-      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="3" style="color:#c00">${data.detail || "오류"}</td></tr>`; return; }
+      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="4" style="color:#c00">${data.detail || "오류"}</td></tr>`; return; }
       tbody.innerHTML = data.users.map(u => `
         <tr>
           <td>${u.admin_id}</td>
+          <td>${u.name || "—"}</td>
           <td><span class="role-badge ${u.role}">${u.role === "master" ? "마스터" : "관리자"}</span></td>
           <td>${u.role === "master" ? "—" : `<button class="admin-del-btn" onclick="removeAdmin('${u.admin_id}')">삭제</button>`}</td>
         </tr>`).join("");
     } catch {
-      tbody.innerHTML = `<tr><td colspan="3" style="color:#c00">불러오기 실패</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" style="color:#c00">불러오기 실패</td></tr>`;
     }
   }
 
   async function addAdmin() {
-    const id  = document.getElementById("new-admin-id").value.trim();
-    const msg = document.getElementById("add-admin-msg");
-    if (!id) { msg.style.color = "#c00"; msg.textContent = "사번을 입력해 주세요."; return; }
+    const id   = document.getElementById("new-admin-id").value.trim();
+    const name = document.getElementById("new-admin-name").value.trim();
+    const msg  = document.getElementById("add-admin-msg");
+    if (!id)   { msg.style.color = "#c00"; msg.textContent = "사번을 입력해 주세요."; return; }
+    if (!name) { msg.style.color = "#c00"; msg.textContent = "이름을 입력해 주세요."; return; }
     msg.style.color = "#555"; msg.textContent = "등록 중…";
     try {
       const res  = await fetch(`${BE}/api/admin/users/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
-        body: JSON.stringify({ admin_id: id }),
+        body: JSON.stringify({ admin_id: id, name }),
       });
       const data = await res.json();
       if (data.ok) {
         msg.style.color = "#0a7a0a";
-        msg.textContent = `✅ 사번 ${id} 등록 완료 (초기 비밀번호: admin1234)`;
-        document.getElementById("new-admin-id").value = "";
+        msg.textContent = `✅ ${name} (${id}) 등록 완료 — 초기 비밀번호: admin1234`;
+        document.getElementById("new-admin-id").value   = "";
+        document.getElementById("new-admin-name").value = "";
         await loadUserList();
       } else {
         msg.style.color = "#c00"; msg.textContent = data.error || "등록 실패";
       }
     } catch { msg.style.color = "#c00"; msg.textContent = "서버 오류"; }
+  }
+
+  async function loadActivityLog() {
+    const tbody = document.getElementById("activity-log-tbody");
+    if (!tbody) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/activity-log`, {
+        headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">불러오기 실패</td></tr>`; return; }
+      if (!data.log.length) {
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">활동 기록이 없습니다.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = data.log.map(e => `
+        <tr>
+          <td>${e.ts}</td>
+          <td>${e.admin_id}${e.name ? ` (${e.name})` : ""}</td>
+          <td>${e.tab}</td>
+          <td>${e.action}</td>
+          <td style="color:#555">${e.detail || "—"}</td>
+        </tr>`).join("");
+    } catch {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">서버 오류</td></tr>`;
+    }
   }
 
   async function removeAdmin(adminId) {
