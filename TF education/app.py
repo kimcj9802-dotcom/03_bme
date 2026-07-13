@@ -61,6 +61,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── 외부 인증 서버 ─────────────────────────────────────────────────────
+AUTH_BASE = os.getenv("AUTH_BASE", "http://121.138.151.6:8091")
+APP_SLUG  = "03_의료기기"
+
 _LLM_BASE   = os.getenv("LLM_BASE",    "http://121.138.151.6:11500")
 OLLAMA_URL  = f"{_LLM_BASE}/api/chat"
 EMBED_URL   = f"{_LLM_BASE}/api/embeddings"
@@ -168,20 +172,48 @@ def _log_activity(session: dict, tab: str, action: str, detail: str = "") -> Non
         _activity_log.pop(0)
     logger.info("[활동] %s(%s) — %s / %s %s", aid, name, tab, action, detail)
 
+def _introspect(token: str, min_level: int = 3) -> dict:
+    """외부 인증서버 토큰 검증 (동기). 실패 시 HTTPException 발생."""
+    try:
+        r = httpx.post(
+            f"{AUTH_BASE}/api/auth/introspect",
+            json={"token": token, "app_slug": APP_SLUG, "required_level": min_level},
+            timeout=5,
+        )
+        if r.status_code == 401:
+            raise HTTPException(401, "토큰이 유효하지 않습니다.")
+        if r.status_code == 403:
+            raise HTTPException(403, "권한이 부족합니다.")
+        data = r.json()
+        data["admin_id"] = data.get("username", "")
+        data["role"]     = "master" if data.get("role_level", 0) >= 4 else "admin"
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("introspect 오류: %s", e)
+        raise HTTPException(503, "인증 서버에 연결할 수 없습니다.")
+
 def _get_session(request: Request) -> dict | None:
-    return _admin_sessions.get(request.headers.get("X-Admin-Token", ""))
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    try:
+        return _introspect(auth[7:], min_level=3)
+    except HTTPException:
+        return None
 
 def _require_admin(request: Request) -> dict:
-    s = _get_session(request)
-    if not s:
-        raise HTTPException(status_code=401, detail="관리자 로그인이 필요합니다.")
-    return s
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "로그인이 필요합니다.")
+    return _introspect(auth[7:], min_level=3)
 
 def _require_master(request: Request) -> dict:
-    s = _require_admin(request)
-    if s["role"] != "master":
-        raise HTTPException(status_code=403, detail="마스터 관리자 권한이 필요합니다.")
-    return s
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "로그인이 필요합니다.")
+    return _introspect(auth[7:], min_level=4)
 
 def _get_all_docs() -> list[str]:
     """업로드된 모든 조각을 펼쳐 반환."""
@@ -1500,6 +1532,34 @@ async def get_devices():
             devices.append({"device_name": dn, "model_name": mn, "chunk_count": len(chunks)})
     devices.sort(key=lambda x: (x["device_name"], x["model_name"]))
     return {"ok": True, "devices": devices}
+
+
+@app.get("/api/me")
+async def get_me(request: Request):
+    """현재 로그인 사용자 정보 (위젯 토큰 확인용)."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return {"authenticated": False}
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            r = await c.post(
+                f"{AUTH_BASE}/api/auth/introspect",
+                json={"token": auth[7:], "app_slug": APP_SLUG},
+            )
+        if r.status_code != 200:
+            return {"authenticated": False}
+        data = r.json()
+        if not data.get("valid"):
+            return {"authenticated": False}
+        return {
+            "authenticated": True,
+            "role":       "master" if data.get("role_level", 0) >= 4 else "admin",
+            "role_level": data.get("role_level"),
+            "username":   data.get("username", ""),
+            "name":       data.get("name", ""),
+        }
+    except Exception:
+        return {"authenticated": False}
 
 
 @app.get("/health")

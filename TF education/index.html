@@ -253,6 +253,8 @@
   /* ── 관리자 추가 2열 ── */
   .add-admin-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 10px; align-items: start; }
 </style>
+<!-- 외부 인증 위젯 (토큰 자동 주입) -->
+<script src="http://121.138.151.6:8091/auth-widget.js"></script>
 </head>
 <body>
 
@@ -881,13 +883,26 @@
     }
   }
   async function doLogout() {
-    if (adminToken) {
-      await fetch(`${BE}/api/admin/logout`, {
-        method: "POST", headers: { "X-Admin-Token": adminToken }
-      }).catch(() => {});
-    }
+    if (window.AuthWidget?.logout) await window.AuthWidget.logout().catch(() => {});
     applyRoleMode("", "", "");
   }
+
+  // ── 외부 인증 위젯 연동 ──────────────────────────────────────────────
+  async function initAuth() {
+    try {
+      const res  = await fetch(BE + "/api/me");
+      const data = await res.json();
+      if (data.authenticated && data.role) {
+        applyRoleMode(data.role, "", data.username || data.name || "");
+      }
+    } catch {}
+  }
+  // 위젯 로그인 이벤트 감지 (위젯이 발생시키는 이벤트명에 따라 자동 작동)
+  ["auth:ready", "auth:login", "authChanged", "authSuccess"].forEach(ev =>
+    window.addEventListener(ev, initAuth)
+  );
+  // 위젯 초기화 대기 후 1회 확인
+  setTimeout(initAuth, 600);
 
   // ── 모달 ─────────────────────────────────────────────────────────────
   function openAdminModal() {
