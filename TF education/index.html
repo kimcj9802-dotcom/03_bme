@@ -1705,5 +1705,72 @@
   }
 </script>
 
+<script>
+/* 외부 인증 위젯 로그아웃 바 → 우측 상단 소형 버튼으로 재배치 */
+(function () {
+  var _moved = false;
+
+  function _styleBar(el) {
+    if (_moved) return;
+    _moved = true;
+    /* 위젯 바 원본 스타일 초기화 후 우측 상단 고정 */
+    el.removeAttribute('style');
+    Object.assign(el.style, {
+      position:     'fixed',
+      top:          '10px',
+      right:        '14px',
+      left:         'auto',
+      bottom:       'auto',
+      width:        'auto',
+      maxWidth:     '180px',
+      zIndex:       '10001',
+      borderRadius: '8px',
+      boxShadow:    '0 2px 10px rgba(0,0,0,.30)',
+      fontSize:     '.82rem',
+      padding:      '0',
+    });
+    /* 위젯 바 내부 버튼도 compact하게 */
+    el.querySelectorAll('button, a[role="button"]').forEach(function(btn) {
+      Object.assign(btn.style, {
+        padding:   '6px 14px',
+        fontSize:  '.82rem',
+        minWidth:  '0',
+        width:     'auto',
+      });
+    });
+  }
+
+  function _findAndMove() {
+    /* body의 직계 자식 중 "로그아웃" 텍스트가 포함된 새 요소 탐색 */
+    document.querySelectorAll('body > *').forEach(function(el) {
+      if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
+      /* 우리 앱의 기존 요소는 id/class 있음, 위젯 바는 대부분 id="auth-*" 또는 무명 */
+      var txt = el.textContent || '';
+      if (txt.includes('로그아웃') && !el.closest('#modal-backdrop')) {
+        _styleBar(el);
+      }
+    });
+  }
+
+  /* DOM 변화 감시 — 위젯이 나중에 삽입될 때 대응 */
+  var obs = new MutationObserver(function(mutations) {
+    mutations.forEach(function(m) {
+      m.addedNodes.forEach(function(node) {
+        if (node.nodeType !== 1) return;
+        var txt = node.textContent || '';
+        if (txt.includes('로그아웃') && !node.closest('#modal-backdrop')) {
+          setTimeout(function() { _styleBar(node); }, 50);
+        }
+      });
+    });
+  });
+  obs.observe(document.body, { childList: true });
+
+  /* 이미 삽입된 경우(스크립트 로드 시점 차이) 즉시 처리 */
+  document.addEventListener('DOMContentLoaded', _findAndMove);
+  window.addEventListener('load', _findAndMove);
+  setTimeout(_findAndMove, 800);
+})();
+</script>
 </body>
 </html>
