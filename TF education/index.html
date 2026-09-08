@@ -15,9 +15,13 @@
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
     box-shadow: 0 2px 8px rgba(0,0,0,.25);
   }
-  header h1 { font-size: 1.05rem; font-weight: 700; }
-  .subtitle  { font-size: .72rem; color: #a8c4e0; margin-top: 2px; }
-  .header-right { display: flex; align-items: center; gap: 14px; }
+  header h1 { font-size: 1.05rem; font-weight: 700; white-space: nowrap; }
+  .subtitle  { font-size: .72rem; color: #a8c4e0; margin-top: 2px; white-space: nowrap; }
+  .header-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+  @media (max-width: 640px) {
+    header { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .header-right { width: 100%; justify-content: space-between; }
+  }
   #status { display: flex; align-items: center; gap: 8px; font-size: .82rem; white-space: nowrap; }
   #dot { width: 10px; height: 10px; border-radius: 50%; background: #aaa; transition: background .3s; }
   #dot.ok  { background: #4caf50; }
@@ -28,10 +32,14 @@
   #btn-admin-login:hover { background: rgba(255,255,255,.28); }
 
   /* ── 탭 ── */
-  .tab-nav { background: #0a2f58; display: flex; padding: 0 24px; gap: 4px; border-bottom: 3px solid #093050; }
-  .tab-btn { padding: 10px 22px; font-size: .9rem; font-weight: 700; color: #a8c4e0; background: transparent; border: none; border-bottom: 3px solid transparent; margin-bottom: -3px; cursor: pointer; width: auto; transition: color .15s, border-color .15s; }
+  .tab-nav { background: #0a2f58; display: flex; padding: 0 24px; gap: 4px; border-bottom: 3px solid #093050; overflow-x: auto; }
+  .tab-btn { padding: 10px 22px; font-size: .9rem; font-weight: 700; color: #a8c4e0; background: transparent; border: none; border-bottom: 3px solid transparent; margin-bottom: -3px; cursor: pointer; width: auto; white-space: nowrap; flex: 0 0 auto; transition: color .15s, border-color .15s; }
   .tab-btn:hover { color: #fff; }
   .tab-btn.tab-active { color: #fff; border-bottom-color: #4db6ff; }
+  @media (max-width: 640px) {
+    .tab-nav { padding: 0 8px; }
+    .tab-btn { padding: 10px 12px; font-size: .82rem; }
+  }
   .tab-admin  { display: none; }
   .tab-master { display: none; }
   body.role-admin .tab-admin,  body.role-master .tab-admin  { display: block; }
@@ -110,42 +118,6 @@
   .chip:hover { background: #dce8f8; }
 
 
-  /* ── 리콜 ── */
-  .source-chip { display: inline-block; margin-top: 8px; font-size: .75rem; padding: 3px 10px; border: 1px solid #1a6b3a; border-radius: 12px; color: #1a6b3a; background: #edf7f1; }
-  .locked-notice { text-align: center; padding: 40px 20px; color: #888; font-size: .9rem; line-height: 2; }
-  .locked-notice button { display: inline-block; width: auto; padding: 8px 20px; font-size: .88rem; margin-top: 12px; background: #e8a020; }
-  .locked-notice button:hover { background: #c88010; }
-
-  /* 리콜 분석 패널 */
-  .recall-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
-  @media (max-width: 600px) { .recall-summary-grid { grid-template-columns: repeat(2,1fr); } }
-  .recall-stat { background: #f5f7fa; border-radius: 10px; padding: 14px 10px; text-align: center; }
-  .recall-stat .num  { font-size: 1.6rem; font-weight: 800; color: #1a3a6b; }
-  .recall-stat .num.danger { color: #c0392b; }
-  .recall-stat .num.warn   { color: #e08000; }
-  .recall-stat .lbl  { font-size: .72rem; color: #777; margin-top: 3px; }
-  .recall-tab-bar { display: flex; gap: 8px; margin: 14px 0 8px; }
-  .recall-tab { padding: 6px 18px; border-radius: 20px; border: 2px solid #ccc; background: #fff; color: #222; font-size: .82rem; font-weight: 700; cursor: pointer; }
-  .recall-tab.active-high   { border-color: #c0392b; background: #c0392b; color: #fff; }
-  .recall-tab.active-review { border-color: #e07000; background: #e07000; color: #fff; }
-  .recall-table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
-  .recall-table { width: 100%; border-collapse: collapse; font-size: .78rem; min-width: 900px; }
-  .recall-table th { position: sticky; top: 0; background: #1a3a6b; color: #fff; padding: 8px 10px; text-align: left; white-space: nowrap; }
-  .recall-table td { padding: 7px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
-  .recall-table tr:hover td { background: #f0f4ff; }
-  .badge-high   { display:inline-block; background:#c0392b; color:#fff; padding:2px 8px; border-radius:10px; font-size:.7rem; font-weight:700; }
-  .badge-review { display:inline-block; background:#e08000; color:#fff; padding:2px 8px; border-radius:10px; font-size:.7rem; font-weight:700; }
-  .score-bar { display:inline-block; width:50px; height:7px; border-radius:4px; background:#eee; vertical-align:middle; margin-right:4px; overflow:hidden; }
-  .score-fill { height:100%; border-radius:4px; }
-  #recall-fetch-btn  { background: #1a3a6b; margin-bottom: 0; }
-  #recall-fetch-btn:hover:not(:disabled) { background: #122b52; }
-  #recall-match-btn  { background: #1a6b3a; margin-top: 12px; }
-  #recall-match-btn:hover:not(:disabled) { background: #145730; }
-  .recall-fetch-status { font-size:.82rem; color:#555; margin:6px 0; min-height:20px; }
-  .recall-asset-drop { cursor:pointer; border:2px dashed #bbb; border-radius:10px; padding:22px; text-align:center; background:#fafafa; transition:border-color .2s; }
-  .recall-asset-drop:hover { border-color:#1a3a6b; background:#f0f4ff; }
-  .recall-asset-drop.dragging { border-color:#e08000; background:#fffbf0; }
-
   /* ── 업로드 자료 현황 ── */
   .docs-list-wrap { margin-top: 4px; }
   .docs-device-group { margin-bottom: 14px; }
@@ -207,14 +179,15 @@
   /* ── 사용자 관리 ── */
   .user-mgmt-section { margin-bottom: 20px; }
   .user-mgmt-section h3 { font-size: .88rem; font-weight: 700; color: #0d3b6e; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #dce8f7; }
+  .admin-table-wrap { overflow-x: auto; }
   .admin-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-  .admin-table th { background: #eef3fb; color: #0d3b6e; font-weight: 700; padding: 7px 10px; text-align: left; }
-  .admin-table td { padding: 7px 10px; border-bottom: 1px solid #f0f3f8; color: #333; vertical-align: middle; }
+  .admin-table th { background: #eef3fb; color: #0d3b6e; font-weight: 700; padding: 7px 10px; text-align: left; white-space: nowrap; }
+  .admin-table td { padding: 7px 10px; border-bottom: 1px solid #f0f3f8; color: #333; vertical-align: middle; white-space: nowrap; }
   .admin-table tr:last-child td { border-bottom: none; }
-  .role-badge { font-size: .7rem; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+  .role-badge { display: inline-block; font-size: .7rem; padding: 2px 8px; border-radius: 10px; font-weight: 700; white-space: nowrap; }
   .role-badge.master { background: #0d3b6e; color: #fff; }
   .role-badge.admin  { background: #e8f0fb; color: #1a3a6b; }
-  .admin-del-btn { font-size: .7rem; padding: 2px 8px; background: #f0f0f0; color: #c00; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; width: auto; }
+  .admin-del-btn { font-size: .7rem; padding: 2px 8px; background: #f0f0f0; color: #c00; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; width: auto; white-space: nowrap; }
   .admin-del-btn:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
   .add-admin-row { display: flex; gap: 8px; margin-top: 10px; }
   .add-admin-row input { flex: 1; font-size: .88rem; }
@@ -226,15 +199,21 @@
   .pw-change-msg { font-size: .78rem; min-height: 1.2em; }
   /* ── 초기화 요청 알림 ── */
   .reset-req-card { background: #fff8f0; border: 1.5px solid #e8a000; border-radius: 10px; }
-  .reset-req-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #fde8c0; font-size: .82rem; }
+  .reset-req-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #fde8c0; font-size: .82rem; }
   .reset-req-row:last-child { border-bottom: none; }
   .reset-req-info { color: #333; }
   .reset-req-actions { display: flex; gap: 6px; }
-  .reset-btn-do   { font-size: .72rem; padding: 3px 10px; background: #0d3b6e; color: #fff; border: none; border-radius: 6px; cursor: pointer; width: auto; }
+  .reset-btn-do   { font-size: .72rem; padding: 3px 10px; background: #0d3b6e; color: #fff; border: none; border-radius: 6px; cursor: pointer; width: auto; white-space: nowrap; }
   .reset-btn-do:hover { background: #0a2f58; }
-  .reset-btn-skip { font-size: .72rem; padding: 3px 10px; background: #eee; color: #555; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; width: auto; }
+  .reset-btn-skip { font-size: .72rem; padding: 3px 10px; background: #eee; color: #555; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; width: auto; white-space: nowrap; }
   .reset-btn-skip:hover { background: #ddd; }
   .no-reset-req { font-size: .82rem; color: #aaa; text-align: center; padding: 14px 0; }
+  /* ── 미해결 질문 ── */
+  .unanswered-row { padding: 10px 12px; border-bottom: 1px solid #fde8c0; }
+  .unanswered-row:last-child { border-bottom: none; }
+  .unanswered-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; color: #999; font-size: .74rem; margin-bottom: 5px; }
+  .unanswered-q { color: #222; font-weight: 600; font-size: .84rem; margin-bottom: 4px; word-break: break-word; }
+  .unanswered-a { color: #666; font-size: .8rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
   /* 탭 버튼 배지 */
   .tab-badge { display: inline-block; background: #e03030; color: #fff; font-size: .62rem; font-weight: 700; border-radius: 8px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; line-height: 1.4; }
   /* 모달 초기화 요청 모드 */
@@ -249,7 +228,7 @@
   .log-table td { padding: 5px 8px; border-bottom: 1px solid #f0f3f8; color: #333; vertical-align: top; }
   .log-table tr:last-child td { border-bottom: none; }
   .log-table td:first-child { color: #888; white-space: nowrap; font-size: .72rem; }
-  .log-wrap { max-height: 340px; overflow-y: auto; border: 1px solid #e0e8f5; border-radius: 6px; }
+  .log-wrap { max-height: 340px; overflow-y: auto; overflow-x: auto; border: 1px solid #e0e8f5; border-radius: 6px; }
   /* ── 관리자 추가 2열 ── */
   .add-admin-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 10px; align-items: start; }
 </style>
@@ -274,7 +253,6 @@
 <!-- ── 탭 ── -->
 <nav class="tab-nav">
   <button class="tab-btn tab-active" id="tab-failure" onclick="switchTab('failure')">🔧 고장 대응</button>
-  <button class="tab-btn tab-admin"  id="tab-recall"  onclick="switchTab('recall')">📋 리콜 확인</button>
   <button class="tab-btn tab-admin"  id="tab-upload"  onclick="switchTab('upload')">📁 자료 업로드</button>
   <button class="tab-btn tab-admin"  id="tab-settings" onclick="switchTab('settings')">⚙️ 설정</button>
 </nav>
@@ -340,158 +318,6 @@
     </div>
 
   </div><!-- /panel-failure -->
-
-  <!-- ══ 리콜 확인 패널 (관리자 전용) ══ -->
-  <div id="panel-recall" class="tab-panel">
-
-    <!-- 비관리자 잠금 안내 -->
-    <div id="recall-locked" class="card locked-notice">
-      🔒 리콜 확인 기능은 <strong>관리자 전용</strong>입니다.<br>
-      관리자 비밀번호를 입력하면 이용할 수 있습니다.
-      <br><button onclick="openAdminModal()">관리자 로그인</button>
-    </div>
-
-    <!-- ① 식약처 회수 목록 조회 -->
-    <div class="card admin-only">
-      <div class="card-label">🏥 식약처 회수·판매중지 목록 조회</div>
-      <p style="font-size:.82rem;color:#555;margin:4px 0 10px;">식약처(MFDS) 공공 API를 호출해 현재 회수 대상 의료기기 목록을 가져옵니다.</p>
-
-      <!-- 필터 행 -->
-      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;gap:6px;font-size:.84rem;">
-          <label>보고일자</label>
-          <input type="date" id="recall-date-from" style="font-size:.83rem;padding:3px 6px;border:1px solid #ccc;border-radius:4px;">
-          <span>~</span>
-          <input type="date" id="recall-date-to" style="font-size:.83rem;padding:3px 6px;border:1px solid #ccc;border-radius:4px;">
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:.84rem;">
-          <label>진행여부</label>
-          <select id="recall-status" style="font-size:.83rem;padding:3px 6px;border:1px solid #ccc;border-radius:4px;">
-            <option value="전체">전체</option>
-            <option value="진행중">진행중</option>
-            <option value="종료">종료</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button id="recall-fetch-btn" onclick="fetchRecallList()">🔄 회수 목록 가져오기</button>
-        <button id="recall-view-btn" onclick="toggleRecallListView()" style="display:none;background:#4a7c6f;">📋 회수목록 확인</button>
-      </div>
-      <div class="recall-fetch-status" id="recall-fetch-status"></div>
-
-      <!-- 회수목록 확인 테이블 -->
-      <div id="recall-list-view" style="display:none;margin-top:12px;">
-        <div id="recall-list-header" style="font-size:.83rem;color:#555;margin-bottom:6px;"></div>
-        <div style="max-height:420px;overflow:auto;border:1px solid #ddd;border-radius:6px;">
-          <table style="min-width:640px;width:100%;border-collapse:collapse;font-size:.81rem;table-layout:fixed;">
-            <colgroup>
-              <col style="width:32px;">
-              <col style="width:160px;">
-              <col style="width:130px;">
-              <col style="width:86px;">
-              <col style="width:60px;">
-              <col style="width:108px;">
-              <col style="width:64px;">
-            </colgroup>
-            <thead>
-              <tr style="background:#f5f7f5;position:sticky;top:0;z-index:1;">
-                <th style="padding:7px 6px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">#</th>
-                <th style="padding:7px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">품목명</th>
-                <th style="padding:7px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">업체명</th>
-                <th style="padding:7px 6px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">보고일자</th>
-                <th style="padding:7px 6px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">진행여부</th>
-                <th style="padding:7px 6px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">회수종류</th>
-                <th style="padding:7px 6px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">비고</th>
-              </tr>
-            </thead>
-            <tbody id="recall-list-body"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 상세조회 모달 -->
-      <div id="recall-detail-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
-        <div style="background:#fff;border-radius:10px;padding:22px 26px;max-width:500px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-            <strong style="font-size:1rem;">📋 회수 상세 정보</strong>
-            <button onclick="closeRecallDetail()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#888;">✕</button>
-          </div>
-          <div id="recall-detail-body" style="font-size:.85rem;line-height:1.8;"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ② 병원 자산 업로드 -->
-    <div class="card admin-only">
-      <div class="card-label">📊 병원 자산 업로드 및 매칭 분석</div>
-      <p style="font-size:.82rem;color:#555;margin:4px 0 10px;">
-        엑셀 파일을 업로드하면 식약처 회수 목록과 자동 매칭합니다.<br>
-        <strong>필수 열:</strong> 자산번호, 관리부서명, 사용자, 한글명칭, 모델명, 제조번호, 취득일자, 제조사, 공급사
-      </p>
-      <div class="recall-asset-drop" id="asset-drop-zone"
-           onclick="document.getElementById('asset-excel-input').click()"
-           ondragover="onAssetDragOver(event)" ondragleave="onAssetDragLeave(event)" ondrop="onAssetDrop(event)">
-        📂 <strong>클릭하거나 엑셀(.xlsx)을 드래그</strong>
-        <div id="asset-file-name" style="margin-top:6px;font-size:.8rem;color:#888;"></div>
-      </div>
-      <input type="file" id="asset-excel-input" accept=".xlsx,.xls" style="display:none" onchange="onAssetFileSelected(this)">
-      <button id="recall-match-btn" onclick="runRecallMatch()" disabled>📊 매칭 분석 실행</button>
-    </div>
-
-    <!-- ③ 분석 결과 -->
-    <div class="card admin-only" id="recall-result-card" style="display:none;">
-      <div class="card-label">📋 매칭 분석 결과</div>
-
-      <!-- 요약 통계 -->
-      <div class="recall-summary-grid">
-        <div class="recall-stat">
-          <div class="num" id="rs-assets">—</div>
-          <div class="lbl">업로드 자산</div>
-        </div>
-        <div class="recall-stat">
-          <div class="num" id="rs-recalls">—</div>
-          <div class="lbl">식약처 회수 건수</div>
-        </div>
-        <div class="recall-stat">
-          <div class="num danger" id="rs-high">—</div>
-          <div class="lbl">높은 가능성</div>
-        </div>
-        <div class="recall-stat">
-          <div class="num warn" id="rs-review">—</div>
-          <div class="lbl">검토 필요</div>
-        </div>
-      </div>
-
-      <!-- 결과 탭 -->
-      <div class="recall-tab-bar">
-        <button class="recall-tab active-high" id="rtab-high" onclick="switchRecallTab('high')">🔴 높은 가능성</button>
-        <button class="recall-tab" id="rtab-review" onclick="switchRecallTab('review')">🟡 검토 필요</button>
-      </div>
-
-      <!-- 테이블 -->
-      <div class="recall-table-wrap">
-        <table class="recall-table" id="recall-result-table">
-          <thead>
-            <tr>
-              <th>자산번호</th>
-              <th>한글명칭</th>
-              <th>모델명</th>
-              <th>제조번호</th>
-              <th>관리부서</th>
-              <th>회수업체명</th>
-              <th>회수품목명</th>
-              <th>점수/100</th>
-              <th>매칭 근거</th>
-            </tr>
-          </thead>
-          <tbody id="recall-result-tbody"></tbody>
-        </table>
-        <div id="recall-no-result" style="display:none;text-align:center;padding:30px;color:#888;font-size:.85rem;">해당 항목 없음</div>
-      </div>
-    </div>
-
-  </div><!-- /panel-recall -->
 
   <!-- ══ 자료 업로드 패널 (관리자 전용) ══ -->
   <div id="panel-upload" class="tab-panel">
@@ -579,14 +405,26 @@
       <div id="doc-delete-requests-list"><div class="no-reset-req">요청 없음</div></div>
     </div>
 
+    <!-- ❓ 답변을 찾지 못한 질문 (마스터 전용) -->
+    <div class="card master-only reset-req-card" id="unanswered-questions-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="card-label" style="margin-bottom:0;color:#8a2b11;">❓ 답변을 찾지 못한 질문</div>
+        <button onclick="loadUnansweredQuestions()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
+      </div>
+      <p style="font-size:.78rem;color:#888;margin:0 0 10px">업로드된 자료에서 답을 찾지 못해 "해당 내용에 대한 답을 찾을 수 없습니다"로 응답한 대화입니다. 매뉴얼 보강에 참고하세요.</p>
+      <div id="unanswered-questions-list"><div class="no-reset-req">해당 질문 없음</div></div>
+    </div>
+
     <!-- ① 관리자 현황 (마스터 전용) -->
     <div class="card master-only">
       <div class="card-label">👥 관리자 현황</div>
       <div class="user-mgmt-section">
-        <table class="admin-table" id="admin-user-table">
-          <thead><tr><th>사번</th><th>이름</th><th>권한</th><th>비밀번호</th><th>삭제</th></tr></thead>
-          <tbody id="admin-user-tbody"><tr><td colspan="3" style="color:#aaa;text-align:center;padding:16px">불러오는 중…</td></tr></tbody>
-        </table>
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="admin-user-table">
+            <thead><tr><th>사번</th><th>이름</th><th>권한</th><th>비밀번호</th><th>삭제</th></tr></thead>
+            <tbody id="admin-user-tbody"><tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">불러오는 중…</td></tr></tbody>
+          </table>
+        </div>
       </div>
 
       <!-- 관리자 추가 -->
@@ -639,7 +477,7 @@
     <!-- 로그인 모드 -->
     <div id="modal-login-section">
       <h2>🔑 관리자 로그인</h2>
-      <p>사번과 비밀번호를 입력하면 리콜 확인, 자료 업로드 기능을 사용할 수 있습니다.</p>
+      <p>사번과 비밀번호를 입력하면 자료 업로드 기능을 사용할 수 있습니다.</p>
       <input id="modal-id" type="text" placeholder="사번 입력"
              onkeydown="if(event.key==='Enter') document.getElementById('modal-pw').focus()" />
       <input id="modal-pw" type="password" placeholder="비밀번호 입력"
@@ -853,7 +691,7 @@
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("panel-active"));
     document.getElementById("tab-"    + tab).classList.add("tab-active");
     document.getElementById("panel-" + tab).classList.add("panel-active");
-    if (tab === "settings" && adminRole === "master") { loadUserList(); loadResetRequests(); loadDocDeleteRequests(); loadActivityLog(); }
+    if (tab === "settings" && adminRole === "master") { loadUserList(); loadResetRequests(); loadDocDeleteRequests(); loadUnansweredQuestions(); loadActivityLog(); }
   }
 
   // ── 관리자 권한 ──────────────────────────────────────────────────────
@@ -869,7 +707,7 @@
     badge.textContent = role === "master" ? `🔑 마스터 (${id})` : `🔑 관리자 (${id})`;
     document.getElementById("btn-admin-login").textContent = isAdmin ? "로그아웃" : "관리자 로그인";
     document.getElementById("btn-admin-login").onclick     = isAdmin ? doLogout : openAdminModal;
-    document.getElementById("recall-locked").style.display = isAdmin ? "none" : "block";
+    renderDocsList();   // 삭제/삭제 요청 버튼 라벨이 role에 따라 바뀌므로 재렌더
     if (!isAdmin) {
       bareMode = false;
       document.getElementById("btn-harn").classList.add("t-active");
@@ -947,6 +785,9 @@
   });
 
   // ── 유틸 ─────────────────────────────────────────────────────────────
+  function _escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  }
   function setQ(text) { document.getElementById("question").value = text; document.getElementById("question").focus(); }
   function clearAnswer() {
     answerBox.textContent = "답변이 여기에 표시됩니다.";
@@ -1124,305 +965,6 @@
     }
   }
 
-  // ── 리콜: 회수목록 캐시 ──────────────────────────────────────────────
-  let recallListData = [];
-
-  function toggleRecallListView() {
-    const view = document.getElementById("recall-list-view");
-    const btn  = document.getElementById("recall-view-btn");
-    const open = view.style.display !== "none";
-    if (open) {
-      view.style.display = "none";
-      btn.textContent = "📋 회수목록 확인";
-    } else {
-      renderRecallListTable();
-      view.style.display = "block";
-      btn.textContent = "📋 목록 닫기";
-    }
-  }
-
-  function renderRecallListTable() {
-    const body   = document.getElementById("recall-list-body");
-    const header = document.getElementById("recall-list-header");
-    header.textContent = `조회된 목록 총 ${recallListData.length.toLocaleString()}건`;
-    const tdBase = "padding:5px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-    body.innerHTML = recallListData.map((item, i) => {
-      const raw  = item.REPORT_SUBMIT_DATE || "";
-      const date = raw.length >= 8
-        ? `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`
-        : "-";
-      const rptName = item.RECALL_REPORT_NAME || "";
-      let progress = rptName === "계획보고" ? "진행중" : rptName === "종료보고" ? "종료" : rptName || "-";
-      const pgColor = progress === "진행중" ? "#c05800" : progress === "종료" ? "#1a6b3a" : "#555";
-      const deptNo  = encodeURIComponent(item.DEPT_RECEIPT_NO || "");
-      return `<tr style="border-bottom:1px solid #f0f0f0;">
-        <td style="${tdBase}text-align:center;color:#aaa;">${i + 1}</td>
-        <td style="${tdBase}" title="${item.ITEM_NAME||""}">${item.ITEM_NAME || "-"}</td>
-        <td style="${tdBase}" title="${item.ENTP_NAME||""}">${item.ENTP_NAME || "-"}</td>
-        <td style="${tdBase}text-align:center;">${date}</td>
-        <td style="${tdBase}text-align:center;color:${pgColor};font-weight:600;">${progress}</td>
-        <td style="${tdBase}text-align:center;">${item.REPORT_KIND_NAME || "-"}</td>
-        <td style="${tdBase}text-align:center;">
-          <button onclick="showRecallDetail('${deptNo}')"
-            style="font-size:.75rem;padding:2px 7px;border:1px solid #4a7c6f;border-radius:4px;background:#fff;color:#4a7c6f;cursor:pointer;white-space:nowrap;">
-            상세조회
-          </button>
-        </td>
-      </tr>`;
-    }).join("");
-  }
-
-  async function showRecallDetail(deptNoEncoded) {
-    const modal = document.getElementById("recall-detail-modal");
-    const body  = document.getElementById("recall-detail-body");
-    modal.style.display = "flex";
-    body.innerHTML = "<span style='color:#888'>⏳ 기본 정보 조회 중…</span>";
-    try {
-      // 기본 정보 + 모델목록 병렬 조회
-      const [detailRes, serialRes] = await Promise.all([
-        fetch(BE + "/api/mfds/recall-detail?dept_no=" + deptNoEncoded),
-        fetch(BE + "/api/mfds/recall-serial?dept_no="  + deptNoEncoded),
-      ]);
-      const [detailData, serialData] = await Promise.all([detailRes.json(), serialRes.json()]);
-
-      if (!detailData.ok) { body.innerHTML = `<span style='color:#c0392b'>❌ ${detailData.error}</span>`; return; }
-      const it = detailData.item;
-      const rptName  = it.RECALL_REPORT_NAME || "";
-      const progress = rptName === "계획보고" ? "진행중" : rptName === "종료보고" ? "종료" : rptName || "-";
-
-      const infoRows = [
-        ["업체명",   it.ENTP_NAME        || "-"],
-        ["품목명",   it.ITEM_NAME         || "-"],
-        ["품목분류", it.MEA_CLASS_NAME    || "-"],
-        ["등급",     it.GRADE             || "-"],
-        ["보고일자", (it.REPORT_SUBMIT_DATE||"").slice(0,8).replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3") || "-"],
-        ["진행여부", progress],
-        ["보고상태", it.REPORT_STATE_NAME || "-"],
-        ["회수종류", it.REPORT_KIND_NAME  || "-"],
-        ["포장단위", it.PACK_UNIT         || "-"],
-        ["회수기한", it.VALID_TERM        || "-"],
-        ["사용목적", it.EE_CONT           || "-"],
-      ];
-
-      let html = infoRows.map(([label, val]) =>
-        `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #f0f0f0;">
-          <span style="min-width:70px;color:#888;flex-shrink:0;">${label}</span>
-          <span style="word-break:break-all;">${val}</span>
-        </div>`
-      ).join("");
-
-      // 모델목록 테이블
-      if (serialData.ok && serialData.count > 0) {
-        const records = serialData.records;
-        html += `<div style="margin-top:14px;">
-          <div style="font-weight:600;margin-bottom:6px;font-size:.88rem;">📦 모델목록 (${records.length.toLocaleString()}건)</div>
-          <div style="max-height:260px;overflow:auto;border:1px solid #ddd;border-radius:6px;">
-            <table style="width:100%;border-collapse:collapse;font-size:.8rem;table-layout:fixed;min-width:340px;">
-              <colgroup><col style="width:110px;"><col style="width:110px;"><col style="width:70px;"><col style="width:70px;"></colgroup>
-              <thead>
-                <tr style="background:#f5f7f5;position:sticky;top:0;">
-                  <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">모델명</th>
-                  <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">제조번호(LOT)</th>
-                  <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">회수대상량</th>
-                  <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">재고량</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${records.map(r => `<tr style="border-bottom:1px solid #f5f5f5;">
-                  <td style="padding:4px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.TYPE_NAME||''}">${r.TYPE_NAME||"-"}</td>
-                  <td style="padding:4px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.MAKE_NO||''}">${r.MAKE_NO||"-"}</td>
-                  <td style="padding:4px 8px;text-align:center;">${r.RECALL_TARGET_QTY||"-"}</td>
-                  <td style="padding:4px 8px;text-align:center;">${r.STOCK_QTY||"-"}</td>
-                </tr>`).join("")}
-              </tbody>
-            </table>
-          </div>
-        </div>`;
-      } else {
-        html += `<div style="margin-top:10px;padding:8px;background:#f5f5f5;border-radius:6px;font-size:.8rem;color:#888;">
-          ℹ️ 이 회수 건에 대한 모델목록 정보가 없습니다.
-        </div>`;
-      }
-
-      body.innerHTML = html;
-    } catch(e) {
-      body.innerHTML = `<span style='color:#c0392b'>❌ 네트워크 오류: ${e.message}</span>`;
-    }
-  }
-
-  function closeRecallDetail() {
-    document.getElementById("recall-detail-modal").style.display = "none";
-  }
-
-  // ── 리콜: 식약처 회수 목록 조회 ────────────────────────────────────
-  async function fetchRecallList() {
-    if (!adminRole) { openAdminModal(); return; }
-    const btn       = document.getElementById("recall-fetch-btn");
-    const st        = document.getElementById("recall-fetch-status");
-    const dateFrom  = document.getElementById("recall-date-from").value.replace(/-/g, "");
-    const dateTo    = document.getElementById("recall-date-to").value.replace(/-/g, "");
-    const status    = document.getElementById("recall-status").value;
-
-    const params = new URLSearchParams();
-    if (dateFrom) params.set("date_from", dateFrom);
-    if (dateTo)   params.set("date_to",   dateTo);
-    if (status !== "전체") params.set("status", status);
-
-    btn.disabled = true;
-    st.textContent = "⏳ 식약처 API 조회 중…";
-    st.style.color = "#555";
-    try {
-      const url  = BE + "/api/mfds/recall-list" + (params.toString() ? "?" + params : "");
-      const res  = await fetch(url);
-      const data = await res.json();
-      if (data.ok) {
-        const filterDesc = [
-          dateFrom || dateTo ? `기간: ${dateFrom||"시작"} ~ ${dateTo||"종료"}` : "",
-          status !== "전체"  ? `진행여부: ${status}` : "",
-        ].filter(Boolean).join(" / ");
-        st.innerHTML = `✅ 조회 완료 — 총 <strong>${data.total_count.toLocaleString()}건</strong> 중 <strong>${data.fetched.toLocaleString()}건</strong> 수신`
-          + (filterDesc ? `<span style="color:#666;margin-left:8px;">(${filterDesc})</span>` : "")
-          + `<br><span style="font-size:.8rem;color:#1a6b3a;">📌 캐시 저장됨 — 매칭 시 재조회 없이 즉시 사용됩니다.</span>`;
-        st.style.color = "#1a6b3a";
-        fetch(`${BE}/api/admin/log-activity`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
-          body: JSON.stringify({ tab: "리콜 확인", action: "회수 목록 조회", detail: `${data.fetched}건 수신${filterDesc ? " / " + filterDesc : ""}` }),
-        }).catch(() => {});
-        // 회수목록 데이터 저장 + 확인 버튼 노출
-        recallListData = data.items || [];
-        const viewBtn = document.getElementById("recall-view-btn");
-        viewBtn.style.display = "inline-block";
-        // 목록이 이미 열려 있으면 즉시 재렌더
-        if (document.getElementById("recall-list-view").style.display !== "none") {
-          renderRecallListTable();
-        }
-      } else {
-        st.textContent = `❌ ${data.error}`;
-        st.style.color = "#c0392b";
-      }
-    } catch (e) {
-      st.textContent = `❌ 네트워크 오류: ${e.message}`;
-      st.style.color = "#c0392b";
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  // ── 리콜: 병원 자산 엑셀 파일 선택 ─────────────────────────────────
-  let assetFile = null;
-
-  function onAssetFileSelected(input) {
-    assetFile = input.files[0] ?? null;
-    const nm = document.getElementById("asset-file-name");
-    if (assetFile) {
-      nm.textContent = `선택: ${assetFile.name}  (${(assetFile.size/1024).toFixed(0)} KB)`;
-      document.getElementById("recall-match-btn").disabled = false;
-    } else {
-      nm.textContent = "";
-      document.getElementById("recall-match-btn").disabled = true;
-    }
-  }
-  function onAssetDragOver(e)  { e.preventDefault(); document.getElementById("asset-drop-zone").classList.add("dragging"); }
-  function onAssetDragLeave()  { document.getElementById("asset-drop-zone").classList.remove("dragging"); }
-  function onAssetDrop(e) {
-    e.preventDefault();
-    document.getElementById("asset-drop-zone").classList.remove("dragging");
-    const f = e.dataTransfer.files[0];
-    if (!f) return;
-    const inp = document.getElementById("asset-excel-input");
-    const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files;
-    onAssetFileSelected(inp);
-  }
-
-  // ── 리콜: 매칭 분석 실행 ────────────────────────────────────────────
-  let _recallData = { high: [], review: [] };
-
-  async function runRecallMatch() {
-    if (!adminRole) { openAdminModal(); return; }
-    if (!assetFile) return;
-    const btn = document.getElementById("recall-match-btn");
-    btn.disabled = true;
-    btn.textContent = "⏳ 분석 중…";
-    document.getElementById("recall-result-card").style.display = "none";
-
-    const formData = new FormData();
-    formData.append("file", assetFile);
-
-    try {
-      const res  = await fetch(BE + "/api/mfds/match", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!data.ok) { alert(`분석 오류: ${data.error}`); return; }
-
-      _recallData = { high: data.high || [], review: data.review || [] };
-
-      document.getElementById("rs-assets").textContent  = data.asset_count.toLocaleString();
-      document.getElementById("rs-recalls").textContent = data.fetched_recall.toLocaleString();
-      document.getElementById("rs-high").textContent    = data.high_count.toLocaleString();
-      document.getElementById("rs-review").textContent  = data.review_count.toLocaleString();
-
-      fetch(`${BE}/api/admin/log-activity`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
-        body: JSON.stringify({ tab: "리콜 확인", action: "병원 자산 매칭 분석",
-          detail: `${assetFile.name} / 자산 ${data.asset_count}건 · 높은가능성 ${data.high_count}건 · 검토필요 ${data.review_count}건` }),
-      }).catch(() => {});
-
-      document.getElementById("recall-result-card").style.display = "block";
-      switchRecallTab("high");
-    } catch (e) {
-      alert(`네트워크 오류: ${e.message}`);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "📊 매칭 분석 실행";
-    }
-  }
-
-  // ── 리콜: 결과 탭 전환 ──────────────────────────────────────────────
-  function switchRecallTab(tab) {
-    const btnH = document.getElementById("rtab-high");
-    const btnR = document.getElementById("rtab-review");
-    btnH.className = "recall-tab" + (tab === "high"   ? " active-high"   : "");
-    btnR.className = "recall-tab" + (tab === "review" ? " active-review" : "");
-
-    const rows = tab === "high" ? _recallData.high : _recallData.review;
-    const tbody = document.getElementById("recall-result-tbody");
-    const noResult = document.getElementById("recall-no-result");
-
-    if (!rows.length) {
-      tbody.innerHTML = "";
-      noResult.style.display = "block";
-      return;
-    }
-    noResult.style.display = "none";
-
-    const scoreColor = (s) => s >= 70 ? "#c0392b" : s >= 50 ? "#e07000" : "#888888";
-    const fmtDate = (d) => {
-      if (!d) return "—";
-      const s = String(d).replace(/\D/g, "");
-      return s.length === 8 ? `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}` : d;
-    };
-
-    tbody.innerHTML = rows.map(r => {
-      const sc = r["점수(100점)"] || 0;
-      const pct = Math.min(sc, 100);
-      const col = scoreColor(sc);
-      return `<tr>
-        <td>${r["자산번호"] || "—"}</td>
-        <td><strong>${r["한글명칭"] || "—"}</strong></td>
-        <td>${r["모델명"] || "—"}</td>
-        <td>${r["제조번호"] || "—"}</td>
-        <td>${r["관리부서명"] || "—"}</td>
-        <td style="font-size:.78rem;">${r["회수업체명"] || "—"}</td>
-        <td style="color:#c0392b;font-weight:700;">${r["회수품목명"] || "—"}<br><span style="font-size:.7rem;color:#999;">${r["회수분류명"] || ""}</span></td>
-        <td style="white-space:nowrap;">
-          <span class="score-bar"><span class="score-fill" style="width:${pct}%;background:${col};"></span></span>
-          <strong style="color:${col};">${sc}/100</strong>
-        </td>
-        <td style="font-size:.74rem;color:#555;">${r["근거"] || "—"}</td>
-      </tr>`;
-    }).join("");
-  }
 
   // ── 사용자 관리 ──────────────────────────────────────────────────────
   async function loadUserList() {
@@ -1443,7 +985,7 @@
           <td>${u.role === "master" ? "—" : `<button class="admin-del-btn" onclick="removeAdmin('${u.admin_id}')">삭제</button>`}</td>
         </tr>`).join("");
     } catch {
-      tbody.innerHTML = `<tr><td colspan="4" style="color:#c00">불러오기 실패</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">불러오기 실패</td></tr>`;
     }
   }
 
@@ -1638,6 +1180,43 @@
       });
       const data = await res.json();
       if (data.ok) await loadDocDeleteRequests();
+      else alert(data.error || "오류");
+    } catch { alert("서버 오류"); }
+  }
+
+  // ── 답변을 찾지 못한 질문 목록 (마스터) ──────────────────────────────
+  async function loadUnansweredQuestions() {
+    const wrap = document.getElementById("unanswered-questions-list");
+    if (!wrap) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/unanswered-questions`, {
+        headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (!data.ok) { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">불러오기 실패</div>`; return; }
+      if (!data.questions.length) {
+        wrap.innerHTML = `<div class="no-reset-req">해당 질문 없음</div>`;
+        return;
+      }
+      wrap.innerHTML = data.questions.map(q => `
+        <div class="unanswered-row">
+          <div class="unanswered-meta">
+            <span>${_escapeHtml([q.device_name, q.model_name].filter(Boolean).join(" / ") || "장비 미지정")} · ${_escapeHtml(q.ts)}</span>
+            <button class="reset-btn-skip" onclick="dismissUnansweredQuestion('${q.id}')">확인 완료</button>
+          </div>
+          <div class="unanswered-q">Q. ${_escapeHtml(q.question)}</div>
+          <div class="unanswered-a">A. ${_escapeHtml(q.answer)}</div>
+        </div>`).join("");
+    } catch { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">서버 오류</div>`; }
+  }
+
+  async function dismissUnansweredQuestion(qid) {
+    try {
+      const res  = await fetch(`${BE}/api/admin/unanswered-questions/${encodeURIComponent(qid)}`, {
+        method: "DELETE", headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (data.ok) await loadUnansweredQuestions();
       else alert(data.error || "오류");
     } catch { alert("서버 오류"); }
   }

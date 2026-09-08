@@ -4,9 +4,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import re
 import io
-import math
-import asyncio
-import difflib
 import httpx
 import json
 import numpy as np
@@ -152,6 +149,41 @@ def _save_doc_delete_requests() -> None:
 
 _doc_delete_requests: list[dict] = _load_doc_delete_requests()
 
+# ── 미해결 질문 로그 (자료에서 답을 찾지 못한 질문 → 마스터 검토용, 디스크 영속) ──
+_UNANSWERED_FILE = _DATA_DIR / "unanswered_questions.json"
+_MAX_UNANSWERED  = 500
+
+def _load_unanswered_questions() -> list[dict]:
+    if _UNANSWERED_FILE.exists():
+        try:
+            return json.loads(_UNANSWERED_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
+
+def _save_unanswered_questions() -> None:
+    _UNANSWERED_FILE.write_text(
+        json.dumps(_unanswered_questions, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+_unanswered_questions: list[dict] = _load_unanswered_questions()
+
+def _log_unanswered_question(device_name: str, model_name: str, question: str, answer: str) -> None:
+    """RAG가 자료에서 답을 찾지 못한 대화를 전체 저장 — 추후 매뉴얼 보강 검토용."""
+    entry = {
+        "id":          str(_uuid.uuid4()),
+        "ts":          datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "device_name": device_name,
+        "model_name":  model_name,
+        "question":    question,
+        "answer":      answer,
+    }
+    _unanswered_questions.append(entry)
+    if len(_unanswered_questions) > _MAX_UNANSWERED:
+        _unanswered_questions.pop(0)
+    _save_unanswered_questions()
+    logger.info("[미해결 질문] %s/%s — %s", device_name, model_name, question)
+
 # ── 활동 로그 (인메모리, 서버 재시작 시 초기화) ──────────────────────
 _activity_log: list[dict] = []
 _MAX_LOG = 500
@@ -194,7 +226,15 @@ def _introspect(token: str, min_level: int = 3) -> dict:
         logger.warning("introspect 오류: %s", e)
         raise HTTPException(503, "인증 서버에 연결할 수 없습니다.")
 
+def _local_admin_session(request: Request) -> dict | None:
+    """앱 자체 로그인(/api/admin/login)이 발급한 X-Admin-Token 세션 조회."""
+    token = request.headers.get("X-Admin-Token", "")
+    return _admin_sessions.get(token) if token else None
+
 def _get_session(request: Request) -> dict | None:
+    local = _local_admin_session(request)
+    if local:
+        return local
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return None
@@ -204,12 +244,20 @@ def _get_session(request: Request) -> dict | None:
         return None
 
 def _require_admin(request: Request) -> dict:
+    local = _local_admin_session(request)
+    if local:
+        return local
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(401, "로그인이 필요합니다.")
     return _introspect(auth[7:], min_level=3)
 
 def _require_master(request: Request) -> dict:
+    local = _local_admin_session(request)
+    if local:
+        if local.get("role") != "master":
+            raise HTTPException(403, "마스터 관리자만 접근할 수 있습니다.")
+        return local
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(401, "로그인이 필요합니다.")
@@ -251,6 +299,10 @@ TROUBLESHOOT_RE = re.compile(
 )
 
 
+# ── 답을 찾지 못했을 때 고정 응답 (거짓 답변 방지 + 미해결 질문 로그 감지용) ──
+NO_ANSWER_MSG = "해당 내용에 대한 답을 찾을 수 없습니다."
+
+
 def build_system_prompt(device_name: str = "", model_name: str = "") -> str:
     """하네스 모드 시스템 프롬프트. 장비/모델 지정 시 해당 장비 한정 문구 포함."""
     device_clause = ""
@@ -262,16 +314,16 @@ def build_system_prompt(device_name: str = "", model_name: str = "") -> str:
             f"이 질문은 {', '.join(parts)}에 관한 것이다. "
             f"근거 자료가 해당 장비·모델에 대한 내용인지 반드시 확인하고, "
             f"다른 장비·모델의 자료를 이 장비에 적용하지 말라. "
-            f"자료에 해당 장비·모델 정보가 없으면 '자료에서 확인되지 않습니다'라고만 답하라.\n"
+            f"자료에 해당 장비·모델 정보가 없으면 '{NO_ANSWER_MSG}'라고만 답하라.\n"
         )
     return (
         "아래 근거 자료에 질문의 답이 실제로 있으면 출처와 함께 답하고, "
-        "자료에 답이 없으면 추측하지 말고 '자료에서 확인되지 않습니다'라고만 답하라.\n"
+        f"자료에 답이 없으면 절대로 추측하거나 지어내지 말고 '{NO_ANSWER_MSG}'라고만 답하라.\n"
         + device_clause +
         "너는 의료기기 수리 매뉴얼 안내 도우미다. "
         "반드시 아래 '참고 자료(매뉴얼 발췌)'에 명시된 내용만 근거로 답한다. "
-        "자료에 없는 모델명·증상·알람 코드·오류 코드·절차는 예외 없이 '자료에서 확인되지 않습니다'라고만 답한다. "
-        "알람 코드 또는 오류 코드가 자료 목록에 없으면 '미수록 코드 — 해당 코드는 제공된 발췌에 수록되어 있지 않습니다.'라고 명시한다.\n"
+        f"자료에 없는 모델명·증상·알람 코드·오류 코드·절차는 예외 없이 '{NO_ANSWER_MSG}'라고만 답한다. "
+        f"알람 코드 또는 오류 코드가 자료 목록에 없을 때도 동일하게 '{NO_ANSWER_MSG}'라고만 답한다.\n"
         "자료에 있는 내용을 답할 때: 증상을 물으면 '증상 → 점검 → 조치' 순서로 정리한다. "
         "답변 끝에 '근거: <항목명> (p.OO)' 형식으로 출처를 표기하고, 근거가 여러 개면 쉼표로 나열한다.\n"
         "임의 분해·직접 수리·내부 회로 수리를 묻는 경우 절차를 알려주지 않고 "
@@ -288,170 +340,6 @@ VIBE_SYSTEM_PROMPT = (
     "제공된 참고 자료 없이 모델 자체 지식으로 한국어로 자유롭게 답한다. "
     "답변 끝에 '⚡ 바이브 모드: 검색 없이 모델 지식으로 답변'이라고 명시한다."
 )
-
-RECALL_SYSTEM_PROMPT = (
-    "아래 [리콜대조결과]에 적힌 숫자와 로트만 인용해 한국어로 한두 줄로 답하라. "
-    "결과에 없는 로트·건수를 지어내지 마라."
-)
-
-# ── 식약처 회수·판매중지 API (IROS_16 v1.1 기준) ────────────────────
-# 참고문서: 오퍼레이션명은 getItemNameList / getSerialNumList 등
-# 주의: 서비스명에 숫자 1 포함(소문자 l 아님). 파라미터는 serviceKey (소문자 s)
-
-# 조회된 회수 목록 메모리 캐시 (매칭 시 재조회 생략)
-_recall_cache: list[dict] = []
-_recall_cache_meta: dict  = {}   # {"total_count": n, "fetched": n, "filters": {...}}
-MFDS_API_KEY  = "97ec72c17de0c92cdb0946f294aef4498c2bb6f6e0d56eaf3c5c35f727e60692"
-# [수정 2026-07-01] 경로명 오타 정정: Rtrv1S1e → RtrvlSle (l↔1 혼동). 이게 HTTP 500 "Unexpected errors"의 원인.
-# 데이터셋 15056785 '식약처_의료기기 회수·판매중지정보'. 오퍼레이션은 getItemNameList01/getSerialNumList01(이미 정확).
-MFDS_API_BASE = "https://apis.data.go.kr/1471000/MdlpRtrvlSleStpgeInfoService02"
-
-# ── getItemNameList 응답 필드 (문서 기준) ──────────────────────────────
-# ITEM_NAME, RECALL_ITEM_SEQ, DEPT_RECEIPT_NO,
-# REPORT_STATE_CODE, REPORT_STATE_NAME, REPORT_SUBMIT_DATE,
-# REPORT_KIND_CODE, REPORT_KIND_NAME, MEDDEV_ITEM_SEQ, MEA_CLASS_NAME
-#
-# getSerialNumList 응답 필드:
-# SERIAL_NUM(제조번호), RECALL_ITEM_SEQ, REPORT_SUBMIT_DATE 등
-
-async def _mfds_call(client: httpx.AsyncClient, op: str, extra: dict | None = None,
-                     page: int = 1, rows: int = 100) -> dict:
-    """식약처 API 단일 페이지 호출. 응답 body dict 반환."""
-    # ServiceKey를 URL에 직접 삽입 (공공데이터포털 이중인코딩 방지)
-    qs = f"serviceKey={MFDS_API_KEY}&pageNo={page}&numOfRows={rows}&type=json"
-    if extra:
-        for k, v in extra.items():
-            qs += f"&{k}={v}"
-    url = f"{MFDS_API_BASE}/{op}?{qs}"
-    logger.debug("▶ MFDS 요청: %s", url.replace(MFDS_API_KEY, "***KEY***"))
-    res = await client.get(url)
-    logger.debug("◀ MFDS 응답: HTTP %s | %d bytes | %s",
-                 res.status_code, len(res.content), res.text[:300])
-    if not res.is_success:
-        raise RuntimeError(f"[HTTP {res.status_code}] {res.text}")
-    try:
-        data = res.json()
-    except Exception:
-        txt = res.text
-        if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in txt:
-            raise RuntimeError("API 키가 등록되지 않았습니다. 공공데이터포털에서 활용신청을 완료하세요.")
-        raise RuntimeError(f"응답 파싱 실패: {txt[:300]}")
-    return data.get("body", {})
-
-async def _mfds_all_pages(op: str, extra: dict | None = None,
-                          max_items: int = 1000, rows_per_page: int = 100) -> tuple[list[dict], int]:
-    """식약처 API 최신 max_items건 조회.
-    1페이지로 totalCount를 파악한 뒤, 마지막 페이지부터 역산해
-    가장 최신 데이터가 담긴 페이지부터 순차 조회한다.
-    """
-    def _parse(body: dict) -> list[dict]:
-        raw = body.get("items", [])
-        if isinstance(raw, dict):
-            raw = [raw]
-        return [{k.upper(): str(v or "").strip() for k, v in it.get("item", it).items()} for it in raw]
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # ① 1페이지로 totalCount 파악
-        first_body   = await _mfds_call(client, op, extra, 1, rows_per_page)
-        total_count  = int(first_body.get("totalCount", 0) or 0)
-        if total_count == 0:
-            return [], 0
-
-        # ② 최신 max_items건을 포함하는 시작 페이지 계산
-        # +1: 마지막 페이지가 rows_per_page 미만일 수 있으므로 한 페이지 여유를 둠
-        total_pages  = math.ceil(total_count / rows_per_page)
-        pages_needed = math.ceil(min(max_items, total_count) / rows_per_page) + 1
-        start_page   = max(1, total_pages - pages_needed + 1)
-        logger.debug("totalCount=%d totalPages=%d startPage=%d", total_count, total_pages, start_page)
-
-        # ③ start_page ~ 마지막 페이지 순차 조회 (1페이지는 이미 수신했으면 재사용)
-        all_items: list[dict] = []
-        for page in range(start_page, total_pages + 1):
-            body  = first_body if page == 1 else await _mfds_call(client, op, extra, page, rows_per_page)
-            items = _parse(body)
-            if not items:
-                break
-            all_items.extend(items)
-
-    # ④ 페이지 경계로 인해 max_items 초과 시 가장 최신(뒤쪽)만 유지
-    if len(all_items) > max_items:
-        all_items = all_items[-max_items:]
-
-    return all_items, total_count
-
-def _sim(a: str, b: str) -> float:
-    a = re.sub(r"\s+", " ", str(a or "")).strip().lower()
-    b = re.sub(r"\s+", " ", str(b or "")).strip().lower()
-    if not a or not b:
-        return 0.0
-    sa, sb = set(a.split()), set(b.split())
-    # 양쪽 모두 2단어 이상이고 교집합이 있으면 Jaccard (빠름)
-    if len(sa) > 1 and len(sb) > 1:
-        inter = len(sa & sb)
-        if inter > 0:
-            return inter / len(sa | sb)
-    # 단어 분리 불가(단일어, 업체명 등) → 문자 단위 SequenceMatcher
-    return difflib.SequenceMatcher(None, a, b).ratio()
-
-def _score_asset_vs_recall(asset: dict, recall: dict,
-                            serial_hit_set: set[str] | None = None) -> tuple[int, list[str]]:
-    """자산 1건 vs 회수 항목 1건 → (점수/100, 근거 목록).
-    점수 체계 (합계 최대 100점):
-      제조번호 일치   = +40  (회수 시리얼 set 조회)
-      업체명 유사도   =  0~20 (제조사/공급사 vs ENTP_NAME)
-      품목명 유사도   =  0~30 (한글명칭 vs ITEM_NAME)
-      분류명 유사도   =  0~10 (한글명칭 vs MEA_CLASS_NAME)
-    기준: ≥70 = 높은 가능성, 50~69 = 검토 필요
-    """
-    score, reasons = 0, []
-
-    # 1) 제조번호 일치 (+40)
-    a_serial = re.sub(r"\s+", "", str(asset.get("제조번호", ""))).lower()
-    if a_serial and serial_hit_set and a_serial in serial_hit_set:
-        score += 40
-        reasons.append(f"제조번호 일치 ({asset.get('제조번호','')})")
-
-    # 2) 업체명 유사도 (0~20) — 제조사·공급사 중 더 높은 쪽
-    r_company = recall.get("ENTP_NAME", "")
-    comp_sim  = max(
-        _sim(str(asset.get("제조사", "") or ""), r_company),
-        _sim(str(asset.get("공급사", "") or ""), r_company),
-    )
-    cs = int(comp_sim * 20)
-    if cs >= 2:
-        score += cs
-        reasons.append(f"업체명 유사도 {int(comp_sim*100)}%")
-
-    # 3) 품목명 유사도 (0~30) — 한글명칭 vs ITEM_NAME
-    nr = _sim(asset.get("한글명칭", ""), recall.get("ITEM_NAME", ""))
-    ns = int(nr * 30)
-    if ns >= 3:
-        score += ns
-        reasons.append(f"품목명 유사도 {int(nr*100)}%")
-
-    # 4) 분류명 유사도 (0~10) — 한글명칭 vs MEA_CLASS_NAME
-    cr = _sim(asset.get("한글명칭", ""), recall.get("MEA_CLASS_NAME", ""))
-    crs = int(cr * 10)
-    if crs >= 2:
-        score += crs
-        reasons.append(f"분류명 유사도 {int(cr*100)}%")
-
-    return score, reasons
-
-def _parse_excel_assets(xlsx_bytes: bytes) -> list[dict]:
-    if not _XLSX_OK:
-        raise RuntimeError("openpyxl 패키지가 필요합니다: pip install openpyxl")
-    wb = _openpyxl.load_workbook(io.BytesIO(xlsx_bytes), data_only=True)
-    ws = wb.active
-    headers = [str(cell.value or "").strip() for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-    assets = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if all(v is None for v in row):
-            continue
-        assets.append({headers[i]: (str(v).strip() if v is not None else "")
-                       for i, v in enumerate(row) if i < len(headers)})
-    return assets
-
 
 # ── 임베딩 유틸 ──────────────────────────────────────────────────────
 class EmbedUnavailable(RuntimeError):
@@ -546,22 +434,6 @@ class ChatRequest(BaseModel):
     model_name:  str = ""   # 모델명 (예: DI-2200P)
 
 
-class DeviceItem(BaseModel):
-    model: str
-    lot: str
-
-
-class RecallItem(BaseModel):
-    model: str
-    lot: str
-    reason: str
-
-
-class RecallCheckRequest(BaseModel):
-    inventory: list[DeviceItem]
-    recall_notice: list[RecallItem]
-
-
 class AdminLoginRequest(BaseModel):
     admin_id: str
     password: str
@@ -610,31 +482,6 @@ async def stream_ollama(question: str, context: str, system_prompt: str):
                     continue
 
 
-async def stream_recall(context: str):
-    """토큰만 흘림 — [DONE] 은 호출부에서 발행."""
-    payload = {
-        "model": MODEL,
-        "stream": True,
-        "messages": [
-            {"role": "system", "content": RECALL_SYSTEM_PROMPT},
-            {"role": "user",   "content": context},
-        ],
-    }
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        async with client.stream("POST", OLLAMA_URL, json=payload) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line:
-                    continue
-                try:
-                    data  = json.loads(line)
-                    token = data.get("message", {}).get("content", "")
-                    if token:
-                        yield f"data: {json.dumps({'token': token})}\n\n"
-                except json.JSONDecodeError:
-                    continue
-
-
 # ── 엔드포인트 ────────────────────────────────────────────────────────
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
@@ -650,10 +497,20 @@ async def chat(req: ChatRequest):
             return
         context     = "\n\n".join(chunks)
         sys_prompt  = build_system_prompt(req.device_name, req.model_name)
+        answer_parts: list[str] = []
         async for chunk in stream_ollama(req.question, context, sys_prompt):
             yield chunk
+            try:
+                token = json.loads(chunk[len("data: "):].strip()).get("token", "")
+                answer_parts.append(token)
+            except (json.JSONDecodeError, ValueError):
+                pass
         yield f"data: {json.dumps({'sources': sources}, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"
+
+        full_answer = "".join(answer_parts)
+        if NO_ANSWER_MSG in full_answer:
+            _log_unanswered_question(req.device_name, req.model_name, req.question, full_answer)
 
     async def sse_bare():
         # 바이브: 토큰 → [DONE] (sources 없음)
@@ -688,363 +545,6 @@ async def chat(req: ChatRequest):
     )
 
 
-@app.post("/api/recall-check")
-async def recall_check(req: RecallCheckRequest):
-    # ── 파이썬이 직접 매칭 (모델에게 시키지 않음) ───────────────────────
-    recall_keys: dict[tuple[str, str], str] = {
-        (r.model.strip(), r.lot.strip()): r.reason.strip()
-        for r in req.recall_notice
-    }
-    matched, unmatched = [], []
-    for item in req.inventory:
-        key = (item.model.strip(), item.lot.strip())
-        if key in recall_keys:
-            matched.append({"model": item.model, "lot": item.lot,
-                            "reason": recall_keys[key]})
-        else:
-            unmatched.append({"model": item.model, "lot": item.lot})
-
-    total, n_match, n_safe = len(req.inventory), len(matched), len(unmatched)
-    matched_lots   = ", ".join(f"{m['lot']}({m['reason']})" for m in matched) or "없음"
-    unmatched_lots = ", ".join(u["lot"] for u in unmatched) or "없음"
-    context = (
-        f"[리콜대조결과]\n"
-        f"전체 보유 기기: {total}건\n"
-        f"리콜 대상: {n_match}건 — 로트 {matched_lots}\n"
-        f"대상 아님: {n_safe}건 — 로트 {unmatched_lots}\n"
-        f"(이 숫자와 로트는 파이썬 코드가 계산한 확정값임)"
-    )
-
-    async def stream_with_meta():
-        meta = {
-            "type": "meta",
-            "total": total, "matched": n_match, "safe": n_safe,
-            "matched_lots": [m["lot"] for m in matched],
-            "safe_lots":    [u["lot"] for u in unmatched],
-        }
-        yield f"data: {json.dumps(meta, ensure_ascii=False)}\n\n"
-        async for chunk in stream_recall(context):
-            yield chunk
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(
-        stream_with_meta(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-# ── 식약처 회수 목록 조회 ─────────────────────────────────────────────
-@app.get("/api/mfds/recall-list")
-async def mfds_recall_list(
-    date_from: str = "",   # YYYYMMDD — 보고일자 시작
-    date_to:   str = "",   # YYYYMMDD — 보고일자 종료
-    status:    str = "전체"  # 전체 / 진행중 / 종료
-):
-    """식약처 getItemNameList 전체 조회 + 필터 + 캐시 저장."""
-    global _recall_cache, _recall_cache_meta
-    logger.info("==== /api/mfds/recall-list | date_from=%s date_to=%s status=%s ====",
-                date_from, date_to, status)
-    try:
-        # 회수 품목 목록 + 업체 목록 병렬 조회
-        (items, total_count), (co_items, _) = await asyncio.gather(
-            _mfds_all_pages("getItemNameList01"),
-            _mfds_all_pages("getCompanyNameList01"),
-        )
-
-        # 업체명 룩업: (MEDDEV_ENTP_SEQ, REPORT_SUBMIT_DATE) → ENTP_NAME
-        co_lookup: dict[tuple, str] = {
-            (c.get("MEDDEV_ENTP_SEQ", ""), c.get("REPORT_SUBMIT_DATE", "")): c.get("ENTP_NAME", "")
-            for c in co_items
-        }
-        for item in items:
-            key = (item.get("MEDDEV_ENTP_SEQ", ""), item.get("REPORT_SUBMIT_DATE", ""))
-            item["ENTP_NAME"] = co_lookup.get(key, "")
-
-        # 클라이언트 사이드 필터
-        if date_from:
-            items = [i for i in items if i.get("REPORT_SUBMIT_DATE", "")[:8] >= date_from]
-        if date_to:
-            items = [i for i in items if i.get("REPORT_SUBMIT_DATE", "")[:8] <= date_to]
-        if status == "진행중":
-            items = [i for i in items if i.get("RECALL_REPORT_NAME", "") == "계획보고"]
-        elif status == "종료":
-            items = [i for i in items if i.get("RECALL_REPORT_NAME", "") == "종료보고"]
-
-        items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
-
-        # 캐시 저장
-        _recall_cache = items
-        _recall_cache_meta = {
-            "total_count": total_count,
-            "fetched": len(items),
-            "filters": {"date_from": date_from, "date_to": date_to, "status": status},
-        }
-        logger.info("캐시 저장 완료: %d건", len(items))
-        return {"ok": True, "total_count": total_count, "fetched": len(items), "items": items}
-    except Exception as e:
-        logger.error("recall-list 오류: %s", e)
-        return {"ok": False, "error": str(e)}
-
-
-# ── 회수 항목 상세조회 (캐시에서 즉시 반환) ──────────────────────────
-@app.get("/api/mfds/recall-detail")
-async def mfds_recall_detail(dept_no: str = ""):
-    """캐시된 회수 목록에서 DEPT_RECEIPT_NO로 상세 정보 반환."""
-    if not dept_no:
-        return {"ok": False, "error": "dept_no 파라미터 필요"}
-    item = next((i for i in _recall_cache if i.get("DEPT_RECEIPT_NO") == dept_no), None)
-    if not item:
-        return {"ok": False, "error": "해당 항목을 캐시에서 찾을 수 없습니다."}
-    return {"ok": True, "item": item}
-
-
-# ── 캐시된 회수 건 전체의 시리얼 set 구성 — 매칭용 ───────────────────
-async def _build_recall_serial_set(recall_items: list[dict]) -> set[str]:
-    """캐시된 회수 건들의 DEPT_RECEIPT_NO를 기준으로
-    getSerialNumList01을 이진탐색 1회 + 병렬 페이지 조회로 일괄 수집.
-    반환: 회수 대상 MAKE_NO(시리얼/LOT) 소문자 set.
-    """
-    dept_nos = {r.get("DEPT_RECEIPT_NO", "") for r in recall_items if r.get("DEPT_RECEIPT_NO")}
-    if not dept_nos:
-        return set()
-
-    min_dept = min(dept_nos)
-
-    def _parse(body: dict) -> list[dict]:
-        raw = body.get("items", [])
-        if isinstance(raw, dict):
-            raw = [raw]
-        return [{k.upper(): str(v or "").strip() for k, v in it.get("item", it).items()} for it in raw]
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # totalCount → lastPage 파악
-        first = await _mfds_call(client, "getSerialNumList01", None, 1, 100)
-        total = int(first.get("totalCount", 0) or 0)
-        if total == 0:
-            return set()
-        last_page = math.ceil(total / 100)
-
-        # min_dept 가 있는 페이지를 이진탐색으로 찾기
-        lo, hi, start_page = 1, last_page, last_page
-        while lo <= hi:
-            mid = (lo + hi) // 2
-            body  = first if mid == 1 else await _mfds_call(client, "getSerialNumList01", None, mid, 100)
-            items = _parse(body)
-            if not items:
-                break
-            page_depts = [it.get("DEPT_RECEIPT_NO", "") for it in items]
-            if min_dept >= min(page_depts):
-                start_page = mid
-                hi = mid - 1
-            else:
-                lo = mid + 1
-
-        fetch_pages = list(range(max(1, start_page - 1), last_page + 1))
-        logger.info("시리얼 일괄조회: 페이지 %d~%d (%d페이지)", fetch_pages[0], last_page, len(fetch_pages))
-
-        # 최대 50페이지 병렬 조회 (초과 시 세마포어 제한)
-        sem50 = asyncio.Semaphore(50)
-        async def _fetch_page(p: int) -> dict:
-            async with sem50:
-                return await _mfds_call(client, "getSerialNumList01", None, p, 100)
-        bodies = await asyncio.gather(*[_fetch_page(p) for p in fetch_pages])
-
-    serial_set: set[str] = set()
-    for body in bodies:
-        for item in _parse(body):
-            if item.get("DEPT_RECEIPT_NO") in dept_nos:
-                make_no = re.sub(r"\s+", "", str(item.get("MAKE_NO", ""))).lower()
-                if make_no:
-                    serial_set.add(make_no)
-
-    logger.info("회수 시리얼셋 구성 완료: %d건", len(serial_set))
-    return serial_set
-
-
-# ── 제조번호(시리얼) 목록 조회 — 이진탐색으로 해당 페이지 특정 ────────
-async def _find_serial_records(dept_no: str) -> list[dict]:
-    """getSerialNumList01을 이진탐색으로 탐색해 DEPT_RECEIPT_NO 매칭 레코드 반환."""
-    def _parse(body: dict) -> list[dict]:
-        raw = body.get("items", [])
-        if isinstance(raw, dict):
-            raw = [raw]
-        return [{k.upper(): str(v or "").strip() for k, v in it.get("item", it).items()} for it in raw]
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # totalCount → lastPage 파악
-        first_body  = await _mfds_call(client, "getSerialNumList01", None, 1, 100)
-        total_count = int(first_body.get("totalCount", 0) or 0)
-        if total_count == 0:
-            return []
-        last_page = math.ceil(total_count / 100)
-
-        # 이진탐색: DEPT_RECEIPT_NO 기준 정렬이므로 해당 페이지 범위를 빠르게 좁힘
-        lo, hi = 1, last_page
-        target_page = None
-        while lo <= hi:
-            mid = (lo + hi) // 2
-            body  = first_body if mid == 1 else await _mfds_call(client, "getSerialNumList01", None, mid, 100)
-            items = _parse(body)
-            if not items:
-                break
-            dept_nos = [it.get("DEPT_RECEIPT_NO", "") for it in items]
-            min_d, max_d = min(dept_nos), max(dept_nos)
-
-            if dept_no in dept_nos or (min_d <= dept_no <= max_d):
-                target_page = mid
-                break
-            elif dept_no > max_d:
-                lo = mid + 1
-            else:
-                hi = mid - 1
-
-        if target_page is None:
-            return []
-
-        # target_page ± 1 범위를 병렬 조회해 전체 레코드 수집
-        pages_to_fetch = [p for p in range(target_page - 1, target_page + 2) if 1 <= p <= last_page]
-        tasks = [_mfds_call(client, "getSerialNumList01", None, p, 100) for p in pages_to_fetch]
-        bodies = await asyncio.gather(*tasks)
-
-        result = []
-        for body in bodies:
-            result.extend(it for it in _parse(body) if it.get("DEPT_RECEIPT_NO") == dept_no)
-        return result
-
-
-@app.get("/api/mfds/recall-serial")
-async def mfds_recall_serial(dept_no: str = ""):
-    """DEPT_RECEIPT_NO에 해당하는 제조번호(모델목록) 반환."""
-    if not dept_no:
-        return {"ok": False, "error": "dept_no 파라미터 필요"}
-    try:
-        records = await _find_serial_records(dept_no)
-        return {"ok": True, "dept_no": dept_no, "count": len(records), "records": records}
-    except Exception as e:
-        logger.exception("recall-serial 오류")
-        return {"ok": False, "error": str(e)}
-
-
-# ── 병원 자산 엑셀 업로드 + 회수 매칭 분석 ──────────────────────────
-@app.post("/api/mfds/match")
-async def mfds_match(file: UploadFile = File(...)):
-    """엑셀 자산 파일 업로드 → 식약처 API 매칭 분석."""
-    logger.info("==== /api/mfds/match 호출 | 파일명: %s ====", file.filename)
-
-    # 1. 엑셀 파싱
-    try:
-        xlsx_bytes = await file.read()
-        assets = _parse_excel_assets(xlsx_bytes)
-    except RuntimeError as e:
-        logger.error("엑셀 파싱 실패: %s", e)
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        logger.error("엑셀 파싱 예외: %s", e)
-        return {"ok": False, "error": f"엑셀 파싱 오류: {e}"}
-
-    logger.info("엑셀 파싱 완료: 자산 %d건", len(assets))
-    if not assets:
-        return {"ok": False, "error": "엑셀에서 자산 데이터를 읽을 수 없습니다."}
-
-    # 2a. 캐시 우선 사용 — 없으면 API 신규 조회
-    if _recall_cache:
-        recall_items = _recall_cache
-        total_recall = _recall_cache_meta.get("total_count", len(recall_items))
-        filters = _recall_cache_meta.get("filters", {})
-        logger.info("캐시 사용: %d건 (필터: %s)", len(recall_items), filters)
-    else:
-        logger.info("캐시 없음 — 식약처 getItemNameList01 신규 조회")
-        try:
-            recall_items, total_recall = await _mfds_all_pages("getItemNameList01")
-            logger.info("getItemNameList01 완료: 전체 %d건 중 %d건 수신", total_recall, len(recall_items))
-        except Exception as e:
-            logger.error("getItemNameList01 오류: %s", e)
-            return {"ok": False, "error": f"식약처 API 오류: {e}"}
-
-    # 2b. 회수 건 전체 시리얼 set 일괄 구성 (자산별 API 호출 제거)
-    try:
-        serial_hit = await _build_recall_serial_set(recall_items)
-    except Exception as e:
-        logger.warning("시리얼 set 구성 오류 (무시): %s", e)
-        serial_hit = set()
-
-    # REPORT_SUBMIT_DATE 내림차순 정렬
-    recall_items.sort(key=lambda x: x.get("REPORT_SUBMIT_DATE", ""), reverse=True)
-
-    # 3. 자산 × 회수 항목 매칭
-    HIGH_THRESHOLD   = 70
-    REVIEW_THRESHOLD = 50
-
-    # 회수 품목을 사전 토큰화 — 공백 분리 단어 집합으로 사전 필터링용
-    def _tok(text: str) -> set[str]:
-        return set(re.sub(r"\s+", " ", str(text or "")).strip().lower().split())
-
-    recall_tokens = [
-        _tok(r.get("ITEM_NAME", "") + " " + r.get("MEA_CLASS_NAME", ""))
-        for r in recall_items
-    ]
-
-    high_list, review_list = [], []
-
-    for asset in assets:
-        asset_tok = _tok(asset.get("한글명칭", ""))
-        # 단어 교집합이 1개 이상인 후보만 비교 → O(n×m) → O(n×k), k≪m
-        if asset_tok:
-            candidates = [i for i, rt in enumerate(recall_tokens) if asset_tok & rt]
-            if not candidates:          # 교집합 없으면 전체 비교 (fallback)
-                candidates = range(len(recall_items))
-        else:
-            candidates = range(len(recall_items))
-
-        best_score, best_recall, best_reasons = 0, None, []
-        for i in candidates:
-            sc, rsn = _score_asset_vs_recall(asset, recall_items[i], serial_hit)
-            if sc > best_score:
-                best_score, best_recall, best_reasons = sc, recall_items[i], rsn
-
-        if best_score < REVIEW_THRESHOLD or best_recall is None:
-            continue
-
-        row = {
-            "자산번호":     asset.get("자산번호", ""),
-            "관리부서명":   asset.get("관리부서명", ""),
-            "사용자":       asset.get("사용자", ""),
-            "한글명칭":     asset.get("한글명칭", ""),
-            "모델명":       asset.get("모델명", ""),
-            "제조번호":     asset.get("제조번호", ""),
-            "취득일자":     asset.get("취득일자", ""),
-            "제조사":       asset.get("제조사", ""),
-            "공급사":       asset.get("공급사", ""),
-            "회수업체명":   best_recall.get("ENTP_NAME", ""),
-            "회수품목명":   best_recall.get("ITEM_NAME", ""),
-            "회수분류명":   best_recall.get("MEA_CLASS_NAME", ""),
-            "부서접수번호": best_recall.get("DEPT_RECEIPT_NO", ""),
-            "회수보고구분": best_recall.get("REPORT_KIND_NAME", ""),
-            "보고상태":     best_recall.get("REPORT_STATE_NAME", ""),
-            "보고일자":     best_recall.get("REPORT_SUBMIT_DATE", ""),
-            "점수(100점)":  best_score,
-            "근거":         " / ".join(best_reasons),
-        }
-        if best_score >= HIGH_THRESHOLD:
-            high_list.append(row)
-        else:
-            review_list.append(row)
-
-    # 보고일자 내림차순 정렬
-    high_list.sort(key=lambda x: x.get("보고일자", ""), reverse=True)
-    review_list.sort(key=lambda x: x.get("보고일자", ""), reverse=True)
-
-    return {
-        "ok": True,
-        "asset_count":  len(assets),
-        "recall_count": total_recall,
-        "fetched_recall": len(recall_items),
-        "high_count":   len(high_list),
-        "review_count": len(review_list),
-        "high":   high_list,
-        "review": review_list,
-    }
 
 
 # ── 관리자 인증 API ───────────────────────────────────────────────────
@@ -1259,6 +759,22 @@ async def dismiss_doc_delete_request(request_id: str, request: Request):
     global _doc_delete_requests
     _doc_delete_requests = [r for r in _doc_delete_requests if r["id"] != request_id]
     _save_doc_delete_requests()
+    return {"ok": True}
+
+
+# ── 미해결 질문 로그 (마스터 전용) ────────────────────────────────────
+@app.get("/api/admin/unanswered-questions")
+async def get_unanswered_questions(request: Request):
+    _require_master(request)
+    return {"ok": True, "questions": list(reversed(_unanswered_questions))}
+
+
+@app.delete("/api/admin/unanswered-questions/{qid}")
+async def dismiss_unanswered_question(qid: str, request: Request):
+    _require_master(request)
+    global _unanswered_questions
+    _unanswered_questions = [q for q in _unanswered_questions if q["id"] != qid]
+    _save_unanswered_questions()
     return {"ok": True}
 
 
