@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -10,7 +10,9 @@ import numpy as np
 import os
 import uuid as _uuid
 import logging
+import pathlib as _pathlib
 from datetime import datetime
+from urllib.parse import quote as _urllib_quote
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -25,30 +27,6 @@ try:
 except ImportError:
     _XLSX_OK = False
 
-try:
-    import fitz          # pymupdf — PDF 텍스트 추출
-    _FITZ_OK = True
-except ImportError:
-    _FITZ_OK = False
-
-try:
-    from docx import Document as _DocxDocument   # python-docx — Word 텍스트 추출
-    _DOCX_OK = True
-except ImportError:
-    _DOCX_OK = False
-
-try:
-    import pytesseract   # OCR (선택 — 없어도 동작)
-    from PIL import Image
-    # Windows 기본 설치 경로 자동 설정
-    import os as _os
-    _tess_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    if _os.path.exists(_tess_path):
-        pytesseract.pytesseract.tesseract_cmd = _tess_path
-    _OCR_OK = True
-except ImportError:
-    _OCR_OK = False
-
 app = FastAPI()
 
 app.add_middleware(
@@ -57,10 +35,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ── 외부 인증 서버 ─────────────────────────────────────────────────────
-AUTH_BASE = os.getenv("AUTH_BASE", "http://121.138.151.6:8091")
-APP_SLUG  = "03_의료기기"
 
 _LLM_BASE   = os.getenv("LLM_BASE",    "http://121.138.151.6:11500")
 OLLAMA_URL  = f"{_LLM_BASE}/api/chat"
@@ -73,14 +47,16 @@ SIM_THRESHOLD  = 0.3  # 잡음 제거용 낮은 임계값 — 최상위 조각�
 # ── 임베딩 캐시 (앱 수명 동안 유지) ──────────────────────────────────
 _doc_embeddings: np.ndarray | None = None   # shape (N, D)
 
-# ── 업로드로 추가된 동적 조각 (디스크 영구 저장) ─────────────────────
+# ── 업로드된 구조화 자료 (엑셀 표준 양식 → 행 단위 저장, 디스크 영구 저장) ──
 # key = "장비명|모델명"  (빈 값이면 "default")
-import pathlib as _pathlib
+# 각 행: {"category": str, "title": str, "content": str, "page": str}
 _DATA_DIR  = _pathlib.Path(__file__).parent / "data"
 _DOCS_FILE = _DATA_DIR / "user_docs.json"
 _DATA_DIR.mkdir(exist_ok=True)
 
-def _load_user_docs() -> dict[str, list[str]]:
+DOC_COLUMNS = ["분류", "제목", "내용", "참고페이지"]
+
+def _load_user_docs() -> dict[str, list[dict]]:
     if _DOCS_FILE.exists():
         try:
             return json.loads(_DOCS_FILE.read_text(encoding="utf-8"))
@@ -93,9 +69,9 @@ def _save_user_docs() -> None:
         json.dumps(_user_docs, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-_user_docs: dict[str, list[str]] = _load_user_docs()
+_user_docs: dict[str, list[dict]] = _load_user_docs()
 
-# ── 관리자 계정 관리 ──────────────────────────────────────────────────
+# ── 계정 관리 (사용자 / 관리자 / 마스터 공용) ────────────────────────
 # TODO: 운영 전환 시 비밀번호를 해시+외부 설정으로 이전할 것
 _ADMIN_FILE = _DATA_DIR / "admins.json"
 
@@ -105,7 +81,8 @@ def _load_admins() -> dict[str, dict]:
             return json.loads(_ADMIN_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return {"2022137": {"password": "admin1234", "role": "master", "name": "김창진"}}
+    return {"2022137": {"password": "admin1234", "role": "master", "name": "김창진",
+                         "dept": "", "must_change_password": False}}
 
 def _save_admins() -> None:
     _ADMIN_FILE.write_text(
@@ -114,6 +91,24 @@ def _save_admins() -> None:
 
 _admin_store: dict[str, dict] = _load_admins()
 _admin_sessions: dict[str, dict] = {}  # {token: {admin_id, role}}
+
+# ── 사용 권한 요청 (계정이 없는 사용자가 로그인 화면에서 제출, 디스크 영속) ──
+_ACCESS_REQ_FILE = _DATA_DIR / "access_requests.json"
+
+def _load_access_requests() -> list[dict]:
+    if _ACCESS_REQ_FILE.exists():
+        try:
+            return json.loads(_ACCESS_REQ_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
+
+def _save_access_requests() -> None:
+    _ACCESS_REQ_FILE.write_text(
+        json.dumps(_access_requests, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+_access_requests: list[dict] = _load_access_requests()
 
 # ── 비밀번호 초기화 요청 (파일 영구 저장) ────────────────────────────
 _RESET_FILE = _DATA_DIR / "reset_requests.json"
@@ -204,71 +199,47 @@ def _log_activity(session: dict, tab: str, action: str, detail: str = "") -> Non
         _activity_log.pop(0)
     logger.info("[활동] %s(%s) — %s / %s %s", aid, name, tab, action, detail)
 
-def _introspect(token: str, min_level: int = 3) -> dict:
-    """외부 인증서버 토큰 검증 (동기). 실패 시 HTTPException 발생."""
-    try:
-        r = httpx.post(
-            f"{AUTH_BASE}/api/auth/introspect",
-            json={"token": token, "app_slug": APP_SLUG, "required_level": min_level},
-            timeout=5,
-        )
-        if r.status_code == 401:
-            raise HTTPException(401, "토큰이 유효하지 않습니다.")
-        if r.status_code == 403:
-            raise HTTPException(403, "권한이 부족합니다.")
-        data = r.json()
-        data["admin_id"] = data.get("username", "")
-        data["role"]     = "master" if data.get("role_level", 0) >= 4 else "admin"
-        return data
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning("introspect 오류: %s", e)
-        raise HTTPException(503, "인증 서버에 연결할 수 없습니다.")
-
-def _local_admin_session(request: Request) -> dict | None:
-    """앱 자체 로그인(/api/admin/login)이 발급한 X-Admin-Token 세션 조회."""
+# ── 세션 (앱 자체 로그인만 사용 — 사번 + 비밀번호) ───────────────────
+def _get_session(request: Request) -> dict | None:
     token = request.headers.get("X-Admin-Token", "")
     return _admin_sessions.get(token) if token else None
 
-def _get_session(request: Request) -> dict | None:
-    local = _local_admin_session(request)
-    if local:
-        return local
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return None
-    try:
-        return _introspect(auth[7:], min_level=3)
-    except HTTPException:
-        return None
+def _require_login(request: Request) -> dict:
+    """로그인만 되어 있으면 통과 (user/admin/master 공용)."""
+    s = _get_session(request)
+    if not s:
+        raise HTTPException(401, "로그인이 필요합니다.")
+    return s
 
 def _require_admin(request: Request) -> dict:
-    local = _local_admin_session(request)
-    if local:
-        return local
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
+    """관리자 이상(admin/master)만 통과."""
+    s = _get_session(request)
+    if not s or s.get("role") not in ("admin", "master"):
         raise HTTPException(401, "로그인이 필요합니다.")
-    return _introspect(auth[7:], min_level=3)
+    return s
 
 def _require_master(request: Request) -> dict:
-    local = _local_admin_session(request)
-    if local:
-        if local.get("role") != "master":
-            raise HTTPException(403, "마스터 관리자만 접근할 수 있습니다.")
-        return local
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
+    s = _get_session(request)
+    if not s:
         raise HTTPException(401, "로그인이 필요합니다.")
-    return _introspect(auth[7:], min_level=4)
+    if s.get("role") != "master":
+        raise HTTPException(403, "마스터 관리자만 접근할 수 있습니다.")
+    return s
 
-def _get_all_docs() -> list[str]:
-    """업로드된 모든 조각을 펼쳐 반환."""
-    result = []
-    for chunks in _user_docs.values():
-        result.extend(chunks)
+def _get_all_docs() -> list[dict]:
+    """업로드된 모든 조각(행)을 펼쳐 반환."""
+    result: list[dict] = []
+    for rows in _user_docs.values():
+        result.extend(rows)
     return result
+
+def _doc_to_text(row: dict) -> str:
+    """구조화된 행 → 임베딩·LLM 컨텍스트용 텍스트."""
+    cat = row.get("category", "")
+    title = row.get("title", "")
+    content = row.get("content", "")
+    head = f"[{cat}] {title}" if cat else title
+    return f"{head}\n{content}" if head else content
 
 def _device_key(device_name: str, model_name: str) -> str:
     return f"{device_name.strip()}|{model_name.strip()}"
@@ -280,23 +251,11 @@ def _get_candidate_indices(device_name: str, model_name: str) -> list[int]:
     if not key.strip("|") or not _user_docs:
         return list(range(len(all_docs)))
     indices, offset = [], 0
-    for k, chunks in _user_docs.items():
+    for k, rows in _user_docs.items():
         if k == key:
-            indices.extend(range(offset, offset + len(chunks)))
-        offset += len(chunks)
+            indices.extend(range(offset, offset + len(rows)))
+        offset += len(rows)
     return indices if indices else list(range(len(all_docs)))
-
-# ── PDF 문제 해결 섹션 키워드 패턴 ────────────────────────────────────
-TROUBLESHOOT_RE = re.compile(
-    r"troubleshoot|trouble[\s\-]?shoot|"
-    r"문제[\s·]?해결|오류|에러|고장|장애|이상|"
-    r"error[\s_]?code|error[\s_]?list|error[\s_]?message|"
-    r"alarm|알람|경보|경고|warning|"
-    r"E\d{1,3}\b|AL-[A-Z]+|Err[\s]?\d|"
-    r"수리|수선|repair|조치|대처|해결|점검|"
-    r"fault|failure|malfunction",
-    re.IGNORECASE,
-)
 
 
 # ── 답을 찾지 못했을 때 고정 응답 (거짓 답변 방지 + 미해결 질문 로그 감지용) ──
@@ -366,28 +325,13 @@ def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
 
 
 async def ensure_doc_embeddings() -> np.ndarray:
-    """DOCS + _user_docs 임베딩을 캐시. 문서 수가 달라지면 재계산."""
+    """업로드된 모든 행의 임베딩을 캐시. 행 수가 달라지면 재계산."""
     global _doc_embeddings
     all_docs = _get_all_docs()
     if _doc_embeddings is None or _doc_embeddings.shape[0] != len(all_docs):
-        vecs = [await embed(doc) for doc in all_docs]
+        vecs = [await embed(_doc_to_text(row)) for row in all_docs]
         _doc_embeddings = np.stack(vecs)   # (N, D)
     return _doc_embeddings
-
-
-def _parse_source(first_line: str) -> dict:
-    """조각 첫 줄에서 title·page 분리. 기본 형식 + 업로드 형식 모두 지원."""
-    # 기본 형식: "N) 조각명 — p.OO"
-    m = re.match(r'^\d+\)\s*(.+?)\s*[—\-]+\s*(p\.\d+)', first_line)
-    if m:
-        return {"title": m.group(1).strip(), "page": m.group(2).strip()}
-    # 업로드 형식: "[업로드 자료 p.OO]"
-    m2 = re.match(r'^\[(.+?)\]', first_line)
-    if m2:
-        inner = m2.group(1).strip()
-        pg = re.search(r'p\.(\d+)', inner)
-        return {"title": inner, "page": f"p.{pg.group(1)}" if pg else ""}
-    return {"title": first_line.strip(), "page": ""}
 
 
 async def retrieve(
@@ -420,8 +364,8 @@ async def retrieve(
         if len(selected) >= top_k:
             break
 
-    chunks  = [all_docs[i] for i in selected]
-    sources = [_parse_source(all_docs[i].splitlines()[0]) for i in selected]
+    chunks  = [_doc_to_text(all_docs[i]) for i in selected]
+    sources = [{"title": all_docs[i].get("title", ""), "page": all_docs[i].get("page", "")} for i in selected]
     return chunks, sources
 
 
@@ -434,7 +378,7 @@ class ChatRequest(BaseModel):
     model_name:  str = ""   # 모델명 (예: DI-2200P)
 
 
-class AdminLoginRequest(BaseModel):
+class LoginRequest(BaseModel):
     admin_id: str
     password: str
 
@@ -453,6 +397,14 @@ class LogActivityRequest(BaseModel):
 
 class ResetRequestBody(BaseModel):
     admin_id: str
+
+class AccessRequestBody(BaseModel):
+    emp_id: str
+    name: str
+    dept: str = ""
+
+class RoleChangeBody(BaseModel):
+    role: str   # "user" | "admin" | "master"
 
 
 # ── 스트리밍 헬퍼 ─────────────────────────────────────────────────────
@@ -484,7 +436,9 @@ async def stream_ollama(question: str, context: str, system_prompt: str):
 
 # ── 엔드포인트 ────────────────────────────────────────────────────────
 @app.post("/api/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, request: Request):
+    _require_login(request)   # 로그인한 사용자만 챗봇 사용 가능
+
     async def sse_harness():
         # 토큰 → sources 이벤트 → [DONE]  (이 순서를 지켜야 프론트가 sources를 읽음)
         try:
@@ -545,26 +499,112 @@ async def chat(req: ChatRequest):
     )
 
 
-
-
-# ── 관리자 인증 API ───────────────────────────────────────────────────
-@app.post("/api/admin/login")
-async def admin_login(req: AdminLoginRequest):
+# ── 로그인 / 로그아웃 / 비밀번호 (전체 역할 공용) ─────────────────────
+@app.post("/api/login")
+async def login(req: LoginRequest):
     acc = _admin_store.get(req.admin_id.strip())
     if not acc or acc["password"] != req.password:
-        return {"ok": False, "error": "아이디 또는 비밀번호가 올바르지 않습니다."}
+        return {"ok": False, "error": "사번 또는 비밀번호가 올바르지 않습니다."}
     token = str(_uuid.uuid4())
     _admin_sessions[token] = {"admin_id": req.admin_id.strip(), "role": acc["role"]}
-    logger.info("관리자 로그인: %s (role=%s)", req.admin_id, acc["role"])
-    return {"ok": True, "token": token, "role": acc["role"], "admin_id": req.admin_id.strip()}
+    logger.info("로그인: %s (role=%s)", req.admin_id, acc["role"])
+    return {
+        "ok": True,
+        "token": token,
+        "role": acc["role"],
+        "admin_id": req.admin_id.strip(),
+        "name": acc.get("name", ""),
+        "dept": acc.get("dept", ""),
+        "must_change_password": bool(acc.get("must_change_password", False)),
+    }
 
 
-@app.post("/api/admin/logout")
-async def admin_logout(request: Request):
+@app.post("/api/logout")
+async def logout(request: Request):
     token = request.headers.get("X-Admin-Token", "")
     s = _admin_sessions.pop(token, None)
     if s:
-        logger.info("관리자 로그아웃: %s", s.get("admin_id"))
+        logger.info("로그아웃: %s", s.get("admin_id"))
+    return {"ok": True}
+
+
+@app.post("/api/change-password")
+async def change_password_api(req: ChangePasswordRequest, request: Request):
+    s = _require_login(request)
+    acc = _admin_store.get(s["admin_id"])
+    if not acc:
+        return {"ok": False, "error": "계정 정보를 찾을 수 없습니다."}
+    if acc["password"] != req.current_password:
+        return {"ok": False, "error": "현재 비밀번호가 올바르지 않습니다."}
+    if len(req.new_password) < 6:
+        return {"ok": False, "error": "새 비밀번호는 6자 이상이어야 합니다."}
+    acc["password"] = req.new_password
+    acc["must_change_password"] = False
+    _save_admins()
+    _log_activity(s, "설정", "비밀번호 변경", "")
+    return {"ok": True}
+
+
+# ── 사용 권한 요청 API ────────────────────────────────────────────────
+@app.post("/api/access-request")
+async def submit_access_request(req: AccessRequestBody):
+    """계정이 없는 사용자가 로그인 화면에서 제출 — 로그인 불필요."""
+    emp_id = req.emp_id.strip()
+    name   = req.name.strip()
+    dept   = req.dept.strip()
+    if not emp_id or not name:
+        return {"ok": False, "error": "사번과 이름을 입력해 주세요."}
+    if emp_id in _admin_store:
+        return {"ok": False, "error": "이미 등록된 사번입니다. 비밀번호를 잊으셨다면 초기화를 요청하세요."}
+    if any(r["emp_id"] == emp_id for r in _access_requests):
+        return {"ok": True, "message": "이미 접수된 요청입니다. 마스터 관리자의 승인을 기다려 주세요."}
+    _access_requests.append({
+        "id":           str(_uuid.uuid4()),
+        "emp_id":       emp_id,
+        "name":         name,
+        "dept":         dept,
+        "requested_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    _save_access_requests()
+    logger.info("사용 권한 요청: %s (%s / %s)", emp_id, name, dept)
+    return {"ok": True, "message": "요청이 접수되었습니다. 마스터 관리자의 승인 후 안내받은 계정으로 로그인해 주세요."}
+
+
+@app.get("/api/admin/access-requests")
+async def get_access_requests(request: Request):
+    _require_master(request)
+    return {"ok": True, "requests": _access_requests}
+
+
+@app.post("/api/admin/access-requests/{req_id}/approve")
+async def approve_access_request(req_id: str, request: Request):
+    s = _require_master(request)
+    global _access_requests
+    r = next((x for x in _access_requests if x["id"] == req_id), None)
+    if not r:
+        raise HTTPException(404, "요청을 찾을 수 없습니다.")
+    emp_id = r["emp_id"]
+    if emp_id in _admin_store:
+        return {"ok": False, "error": "이미 등록된 사번입니다."}
+    default_pw = "user1234"
+    _admin_store[emp_id] = {
+        "password": default_pw, "role": "user",
+        "name": r["name"], "dept": r.get("dept", ""),
+        "must_change_password": True,
+    }
+    _save_admins()
+    _access_requests = [x for x in _access_requests if x["id"] != req_id]
+    _save_access_requests()
+    _log_activity(s, "설정", "사용 권한 승인", f"{emp_id} ({r['name']}) 등록")
+    return {"ok": True, "message": f"{r['name']} ({emp_id}) 계정이 생성되었습니다. 초기 비밀번호: {default_pw}"}
+
+
+@app.delete("/api/admin/access-requests/{req_id}")
+async def dismiss_access_request(req_id: str, request: Request):
+    _require_master(request)
+    global _access_requests
+    _access_requests = [x for x in _access_requests if x["id"] != req_id]
+    _save_access_requests()
     return {"ok": True}
 
 
@@ -572,7 +612,7 @@ async def admin_logout(request: Request):
 async def list_admin_users(request: Request):
     _require_master(request)
     users = [
-        {"admin_id": aid, "role": d["role"], "name": d.get("name", "")}
+        {"admin_id": aid, "role": d["role"], "name": d.get("name", ""), "dept": d.get("dept", "")}
         for aid, d in sorted(_admin_store.items())
     ]
     return {"ok": True, "users": users}
@@ -587,9 +627,34 @@ async def add_admin_user(req: AddAdminRequest, request: Request):
         return {"ok": False, "error": "사번을 입력해 주세요."}
     if aid in _admin_store:
         return {"ok": False, "error": f"이미 등록된 사번입니다: {aid}"}
-    _admin_store[aid] = {"password": "admin1234", "role": "admin", "name": name}
+    _admin_store[aid] = {"password": "admin1234", "role": "admin", "name": name,
+                          "dept": "", "must_change_password": True}
     _save_admins()
     _log_activity(s, "설정", "관리자 등록", f"{aid} ({name}) 등록")
+    return {"ok": True}
+
+
+@app.post("/api/admin/users/{admin_id}/role")
+async def change_user_role(admin_id: str, req: RoleChangeBody, request: Request):
+    s = _require_master(request)
+    if req.role not in ("user", "admin", "master"):
+        return {"ok": False, "error": "올바르지 않은 권한입니다."}
+    if admin_id == s["admin_id"]:
+        return {"ok": False, "error": "자기 자신의 권한은 변경할 수 없습니다."}
+    acc = _admin_store.get(admin_id)
+    if not acc:
+        return {"ok": False, "error": "존재하지 않는 사번입니다."}
+    if acc.get("role") == "master":
+        master_count = sum(1 for a in _admin_store.values() if a.get("role") == "master")
+        if master_count <= 1 and req.role != "master":
+            return {"ok": False, "error": "마지막 마스터 계정의 권한은 변경할 수 없습니다."}
+    old_role = acc.get("role")
+    acc["role"] = req.role
+    _save_admins()
+    for t, sv in list(_admin_sessions.items()):
+        if sv["admin_id"] == admin_id:
+            sv["role"] = req.role
+    _log_activity(s, "설정", "권한 변경", f"{admin_id} ({acc.get('name','')}) {old_role} → {req.role}")
     return {"ok": True}
 
 
@@ -608,23 +673,7 @@ async def delete_admin_user(admin_id: str, request: Request):
     for t in [t for t, sv in list(_admin_sessions.items()) if sv["admin_id"] == admin_id]:
         del _admin_sessions[t]
     _save_admins()
-    _log_activity(s, "설정", "관리자 삭제", f"{admin_id} ({del_name}) 삭제")
-    return {"ok": True}
-
-
-@app.post("/api/admin/change-password")
-async def change_password_api(req: ChangePasswordRequest, request: Request):
-    s = _require_admin(request)
-    acc = _admin_store.get(s["admin_id"])
-    if not acc:
-        return {"ok": False, "error": "계정 정보를 찾을 수 없습니다."}
-    if acc["password"] != req.current_password:
-        return {"ok": False, "error": "현재 비밀번호가 올바르지 않습니다."}
-    if len(req.new_password) < 6:
-        return {"ok": False, "error": "새 비밀번호는 6자 이상이어야 합니다."}
-    _admin_store[s["admin_id"]]["password"] = req.new_password
-    _save_admins()
-    _log_activity(s, "설정", "비밀번호 변경", "")
+    _log_activity(s, "설정", "계정 삭제", f"{admin_id} ({del_name}) 삭제")
     return {"ok": True}
 
 
@@ -644,7 +693,7 @@ async def log_activity_api(req: LogActivityRequest, request: Request):
 
 
 # ── 비밀번호 초기화 요청 API ──────────────────────────────────────────
-@app.post("/api/admin/request-reset")
+@app.post("/api/request-reset")
 async def request_password_reset(req: ResetRequestBody):
     """로그인 없이 누구나 호출 가능 — 사번 존재 여부만 확인."""
     aid = req.admin_id.strip()
@@ -679,14 +728,16 @@ async def reset_admin_password(admin_id: str, request: Request):
         return {"ok": False, "error": "존재하지 않는 사번입니다."}
     if acc.get("role") == "master":
         return {"ok": False, "error": "마스터 계정은 초기화할 수 없습니다."}
-    _admin_store[admin_id]["password"] = "admin1234"
+    default_pw = "admin1234" if acc.get("role") == "admin" else "user1234"
+    acc["password"] = default_pw
+    acc["must_change_password"] = True
     _save_admins()
     global _reset_requests
     _reset_requests = [r for r in _reset_requests if r["admin_id"] != admin_id]
     _save_reset_requests()
     name = acc.get("name", "")
-    _log_activity(s, "설정", "비밀번호 초기화", f"{admin_id} ({name}) → admin1234")
-    return {"ok": True}
+    _log_activity(s, "설정", "비밀번호 초기화", f"{admin_id} ({name}) → {default_pw}")
+    return {"ok": True, "message": f"초기화되었습니다. 초기 비밀번호: {default_pw}"}
 
 
 @app.delete("/api/admin/reset-requests/{admin_id}")
@@ -778,214 +829,127 @@ async def dismiss_unanswered_question(qid: str, request: Request):
     return {"ok": True}
 
 
-# ── PDF 파싱 헬퍼 ─────────────────────────────────────────────────────
-def _page_to_text_ocr(page) -> str:
-    """pymupdf 페이지 → 텍스트. 스캔본이면 OCR 시도."""
-    text = page.get_text().strip()
-    if len(text) >= 100:
-        return text
-    # 텍스트가 희박 → 스캔 이미지로 판단, OCR 시도
-    if _OCR_OK:
-        try:
-            mat = fitz.Matrix(2.0, 2.0)   # 2× 확대로 OCR 정확도 향상
-            pix = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY)
-            img = Image.open(io.BytesIO(pix.tobytes("png")))
-            text = pytesseract.image_to_string(img, lang="kor+eng").strip()
-        except Exception:
-            pass
-    return text
-
-
-def _extract_pdf_pages(pdf_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
-    """PDF 전 페이지에서 (page_num, text) 목록 반환. OCR 사용 여부도 반환."""
-    if not _FITZ_OK:
-        raise RuntimeError("pymupdf(fitz) 패키지가 설치되지 않았습니다: pip install pymupdf")
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    pages, ocr_used = [], False
-    for i, page in enumerate(doc, 1):
-        raw = page.get_text().strip()
-        if len(raw) < 100 and _OCR_OK:
-            ocr_used = True
-        text = _page_to_text_ocr(page)
-        if text:
-            pages.append((i, text))
-    doc.close()
-    return pages, ocr_used
-
-
-def _extract_docx_pages(docx_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
-    """DOCX 전체 단락을 (pseudo_page_num, text) 목록으로 반환."""
-    if not _DOCX_OK:
-        raise RuntimeError("python-docx 패키지가 없습니다: pip install python-docx")
-    doc = _DocxDocument(io.BytesIO(docx_bytes))
-    pages, page_num, bucket, buf_len = [], 1, [], 0
-    CHUNK = 600
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            continue
-        bucket.append(text)
-        buf_len += len(text)
-        if buf_len >= CHUNK:
-            pages.append((page_num, "\n\n".join(bucket)))
-            page_num += 1
-            bucket, buf_len = [], 0
-    if bucket:
-        pages.append((page_num, "\n\n".join(bucket)))
-    return pages, False
-
-
-def _extract_xlsx_pages(xlsx_bytes: bytes) -> tuple[list[tuple[int, str]], bool]:
-    """XLSX 시트별 셀 내용을 (pseudo_page_num, text) 목록으로 반환."""
+# ── 엑셀 표준 양식 업로드/다운로드 ────────────────────────────────────
+def _parse_excel_docs(xlsx_bytes: bytes) -> list[dict]:
+    """표준 양식(분류/제목/내용/참고페이지) 엑셀 → 행 리스트."""
     if not _XLSX_OK:
-        raise RuntimeError("openpyxl 패키지가 없습니다: pip install openpyxl")
+        raise RuntimeError("openpyxl 패키지가 설치되지 않았습니다: pip install openpyxl")
     wb = _openpyxl.load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
-    pages, page_num = [], 1
-    CHUNK = 600
-    for sh_name in wb.sheetnames:
-        ws = wb[sh_name]
-        row_texts, bucket, buf_len = [], [], 0
-        for row in ws.iter_rows(values_only=True):
-            cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
-            if cells:
-                row_texts.append(" | ".join(cells))
-        for row_text in row_texts:
-            bucket.append(row_text)
-            buf_len += len(row_text)
-            if buf_len >= CHUNK:
-                pages.append((page_num, f"[시트: {sh_name}]\n" + "\n".join(bucket)))
-                page_num += 1
-                bucket, buf_len = [], 0
-        if bucket:
-            pages.append((page_num, f"[시트: {sh_name}]\n" + "\n".join(bucket)))
-            page_num += 1
+    ws = wb.worksheets[0]
+    header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
+    headers = [str(h).strip() if h is not None else "" for h in header_row]
+
+    def _col(*names: str) -> int | None:
+        for name in names:
+            if name in headers:
+                return headers.index(name)
+        return None
+
+    idx_cat  = _col("분류", "카테고리")
+    idx_title = _col("제목")
+    idx_content = _col("내용", "본문")
+    idx_page = _col("참고페이지", "페이지")
+
+    if idx_title is None or idx_content is None:
+        raise RuntimeError("표준 양식이 아닙니다. '제목', '내용' 열이 반드시 있어야 합니다. (표준 양식 다운로드 버튼을 이용해 주세요)")
+
+    rows: list[dict] = []
+    for raw in ws.iter_rows(min_row=2, values_only=True):
+        def _cell(i: int | None) -> str:
+            if i is None or i >= len(raw) or raw[i] is None:
+                return ""
+            return str(raw[i]).strip()
+        title = _cell(idx_title)
+        content = _cell(idx_content)
+        if not title and not content:
+            continue
+        rows.append({
+            "category": _cell(idx_cat),
+            "title":    title,
+            "content":  content,
+            "page":     _cell(idx_page),
+        })
     wb.close()
-    return pages, False
+    return rows
 
 
-def _chunk_all_pages(
-    pages: list[tuple[int, str]],
-    device_name: str = "",
-    model_name: str = "",
-) -> list[str]:
-    """전체 페이지를 조각으로 추출 (필터 없음) — docx·xlsx 전용."""
-    tag_parts = []
-    if device_name: tag_parts.append(f"장비: {device_name}")
-    if model_name:  tag_parts.append(f"모델: {model_name}")
-    tag = " / ".join(tag_parts)
-    chunks = []
-    for page_num, text in pages:
-        if not text.strip():
-            continue
-        prefix = f"[{tag} — p.{page_num}]" if tag else f"[업로드 자료 p.{page_num}]"
-        if len(text) <= 800:
-            chunks.append(f"{prefix}\n{text}")
-            continue
-        paragraphs = re.split(r"\n{2,}", text)
-        bucket: list[str] = []
-        for para in paragraphs:
-            bucket.append(para)
-            if len("\n\n".join(bucket)) > 600:
-                chunk_text = "\n\n".join(bucket).strip()
-                if chunk_text:
-                    chunks.append(f"{prefix}\n{chunk_text}")
-                bucket = []
-        if bucket:
-            chunk_text = "\n\n".join(bucket).strip()
-            if chunk_text:
-                chunks.append(f"{prefix}\n{chunk_text}")
-    return chunks
+def _build_docs_workbook(rows: list[dict]):
+    """행 리스트 → openpyxl Workbook (표준 양식 컬럼)."""
+    wb = _openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "매뉴얼"
+    ws.append(DOC_COLUMNS)
+    for row in rows:
+        ws.append([row.get("category", ""), row.get("title", ""), row.get("content", ""), row.get("page", "")])
+    widths = [14, 28, 60, 12]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+    return wb
 
 
-def _filter_troubleshoot_chunks(
-    pages: list[tuple[int, str]],
-    device_name: str = "",
-    model_name: str = "",
-) -> list[str]:
-    """문제 해결·오류 코드 관련 페이지만 조각으로 추출. 장비/모델 태그 포함."""
-    tag_parts = []
-    if device_name: tag_parts.append(f"장비: {device_name}")
-    if model_name:  tag_parts.append(f"모델: {model_name}")
-    tag = " / ".join(tag_parts)
-
-    chunks = []
-    for page_num, text in pages:
-        if not TROUBLESHOOT_RE.search(text):
-            continue
-        prefix = f"[{tag} — p.{page_num}]" if tag else f"[업로드 자료 p.{page_num}]"
-        if len(text) <= 800:
-            chunks.append(f"{prefix}\n{text}")
-            continue
-        paragraphs = re.split(r"\n{2,}", text)
-        bucket: list[str] = []
-        for para in paragraphs:
-            bucket.append(para)
-            if len("\n\n".join(bucket)) > 600:
-                chunk_text = "\n\n".join(bucket).strip()
-                if chunk_text:
-                    chunks.append(f"{prefix}\n{chunk_text}")
-                bucket = []
-        if bucket:
-            chunk_text = "\n\n".join(bucket).strip()
-            if chunk_text:
-                chunks.append(f"{prefix}\n{chunk_text}")
-    return chunks
+@app.get("/api/download-template")
+async def download_template():
+    """빈 표준 양식(헤더만) 다운로드 — 로그인 불필요."""
+    if not _XLSX_OK:
+        raise HTTPException(500, "서버에 openpyxl 패키지가 없습니다.")
+    wb = _build_docs_workbook([])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=upload_template.xlsx"},
+    )
 
 
-@app.post("/api/upload-pdf")
-async def upload_pdf(
+@app.get("/api/download-docs")
+async def download_docs(device_name: str = "", model_name: str = "", request: Request = None):
+    _require_admin(request)
+    key = _device_key(device_name, model_name)
+    rows = _user_docs.get(key)
+    if rows is None:
+        raise HTTPException(404, "해당 장비/모델의 업로드 자료가 없습니다.")
+    wb = _build_docs_workbook(rows)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    dev_label = "_".join(filter(None, [device_name, model_name])) or "manual"
+    encoded_name = _urllib_quote(f"{dev_label}.xlsx")
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=manual.xlsx; filename*=UTF-8''{encoded_name}"},
+    )
+
+
+@app.post("/api/upload-docs")
+async def upload_docs(
     request: Request,
     file: UploadFile = File(...),
     device_name: str = Form(""),
     model_name:  str = Form(""),
 ):
     global _user_docs, _doc_embeddings
-    if not _get_session(request):
-        return {"ok": False, "error": "관리자 로그인이 필요합니다."}
+    _require_admin(request)
 
     fname = file.filename.lower()
-    if fname.endswith(".pdf"):
-        ext = ".pdf"
-    elif fname.endswith(".docx"):
-        ext = ".docx"
-    elif fname.endswith(".xlsx"):
-        ext = ".xlsx"
-    else:
-        return {"ok": False, "error": "PDF(.pdf), Word(.docx), Excel(.xlsx) 파일만 업로드 가능합니다."}
+    if not fname.endswith(".xlsx"):
+        return {"ok": False, "error": "엑셀(.xlsx) 파일만 업로드할 수 있습니다. '표준 양식 다운로드'로 받은 양식에 맞춰 작성해 주세요."}
 
     raw_bytes = await file.read()
-    ocr_used  = False
     try:
-        if ext == ".pdf":
-            pages, ocr_used = _extract_pdf_pages(raw_bytes)
-            chunks = _filter_troubleshoot_chunks(pages, device_name, model_name)
-            if not chunks:
-                return {
-                    "ok": False,
-                    "error": (
-                        "문제 해결·오류 코드 관련 내용을 찾을 수 없습니다. "
-                        "파일에 Troubleshooting / Error Code / 문제 해결 섹션이 포함되어 있는지 확인하세요."
-                    ),
-                    "pages_processed": len(pages),
-                    "ocr_used": ocr_used,
-                }
-        elif ext == ".docx":
-            pages, _ = _extract_docx_pages(raw_bytes)
-            chunks = _chunk_all_pages(pages, device_name, model_name)
-            if not chunks:
-                return {"ok": False, "error": "Word 문서에서 텍스트를 추출할 수 없습니다."}
-        else:  # .xlsx
-            pages, _ = _extract_xlsx_pages(raw_bytes)
-            chunks = _chunk_all_pages(pages, device_name, model_name)
-            if not chunks:
-                return {"ok": False, "error": "엑셀 파일에서 내용을 추출할 수 없습니다."}
+        rows = _parse_excel_docs(raw_bytes)
     except RuntimeError as e:
         return {"ok": False, "error": str(e)}
     except Exception as e:
         return {"ok": False, "error": f"파일 파싱 오류: {e}"}
 
+    if not rows:
+        return {"ok": False, "error": "엑셀에서 유효한 행을 찾을 수 없습니다. '제목' 또는 '내용'이 채워진 행이 필요합니다."}
+
     key = _device_key(device_name, model_name) or "default"
-    _user_docs[key] = chunks
+    _user_docs[key] = rows
     _doc_embeddings = None
     _save_user_docs()
 
@@ -993,17 +957,15 @@ async def upload_pdf(
     if s:
         dev_label = " ".join(filter(None, [device_name, model_name]))
         _log_activity(s, "자료 업로드", "매뉴얼 업로드",
-                      f"{dev_label} / {file.filename} ({len(chunks)}개 조각)")
+                      f"{dev_label} / {file.filename} ({len(rows)}행)")
 
     return {
         "ok": True,
         "filename": file.filename,
         "device_name": device_name,
         "model_name": model_name,
-        "pages_processed": len(pages),
-        "chunks_extracted": len(chunks),
-        "ocr_used": ocr_used,
-        "preview": chunks[:3],
+        "rows_extracted": len(rows),
+        "preview": [f"[{r['category']}] {r['title']}" if r['category'] else r['title'] for r in rows[:3]],
     }
 
 
@@ -1014,11 +976,7 @@ async def reset_docs(
     model_name:  str = Form(""),
 ):
     """업로드 자료 초기화. 마스터 전용. 장비/모델 지정 시 해당 것만, 미지정 시 전체."""
-    s = _get_session(request)
-    if not s:
-        return {"ok": False, "error": "관리자 로그인이 필요합니다."}
-    if s.get("role") != "master":
-        return {"ok": False, "error": "마스터 관리자만 자료를 삭제할 수 있습니다."}
+    s = _require_master(request)
     global _user_docs, _doc_embeddings
     key = _device_key(device_name, model_name)
     if key.strip("|"):
@@ -1039,43 +997,15 @@ async def get_devices():
     """업로드된 장비/모델 목록 + 조각 수 반환 — 드롭다운·현황 카드 공용."""
     devices = []
     seen: set[tuple] = set()
-    for key, chunks in _user_docs.items():
+    for key, rows in _user_docs.items():
         parts = key.split("|", 1)
         dn = parts[0].strip()
         mn = parts[1].strip() if len(parts) > 1 else ""
         if dn and (dn, mn) not in seen:
             seen.add((dn, mn))
-            devices.append({"device_name": dn, "model_name": mn, "chunk_count": len(chunks)})
+            devices.append({"device_name": dn, "model_name": mn, "chunk_count": len(rows)})
     devices.sort(key=lambda x: (x["device_name"], x["model_name"]))
     return {"ok": True, "devices": devices}
-
-
-@app.get("/api/me")
-async def get_me(request: Request):
-    """현재 로그인 사용자 정보 (위젯 토큰 확인용)."""
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return {"authenticated": False}
-    try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            r = await c.post(
-                f"{AUTH_BASE}/api/auth/introspect",
-                json={"token": auth[7:], "app_slug": APP_SLUG},
-            )
-        if r.status_code != 200:
-            return {"authenticated": False}
-        data = r.json()
-        if not data.get("valid"):
-            return {"authenticated": False}
-        return {
-            "authenticated": True,
-            "role":       "master" if data.get("role_level", 0) >= 4 else "admin",
-            "role_level": data.get("role_level"),
-            "username":   data.get("username", ""),
-            "name":       data.get("name", ""),
-        }
-    except Exception:
-        return {"authenticated": False}
 
 
 @app.get("/health")
@@ -1086,12 +1016,12 @@ async def health():
 
 @app.get("/api/debug-docs")
 async def debug_docs():
-    """업로드된 문서 키·조각 수·첫 200자 미리보기 반환 (디버그용)."""
+    """업로드된 문서 키·행 수·미리보기 반환 (디버그용)."""
     return {
         "user_doc_keys": list(_user_docs.keys()),
-        "user_doc_chunk_counts": {k: len(v) for k, v in _user_docs.items()},
+        "user_doc_row_counts": {k: len(v) for k, v in _user_docs.items()},
         "previews": {
-            k: [c[:200] for c in v[:3]]
+            k: [_doc_to_text(r)[:200] for r in v[:3]]
             for k, v in _user_docs.items()
         },
     }
@@ -1114,7 +1044,7 @@ async def debug_retrieve(req: ChatRequest):
         "search_query": search_q,
         "candidates_total": len(candidates),
         "top_results": [
-            {"index": i, "sim": round(sims[i], 4), "preview": all_docs[i][:200]}
+            {"index": i, "sim": round(sims[i], 4), "preview": _doc_to_text(all_docs[i])[:200]}
             for i in ranked
         ],
     }
@@ -1123,7 +1053,3 @@ async def debug_retrieve(req: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
-
-
-
-

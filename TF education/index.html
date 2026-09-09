@@ -5,37 +5,52 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>의료기기 관리형 챗봇</title>
 <style>
+  :root {
+    --blue: #2563eb;
+    --blue-dark: #1d4ed8;
+    --blue-light: #eff6ff;
+    --blue-border: #bfdbfe;
+    --border: #e5e7eb;
+    --text: #1f2937;
+    --text-dim: #6b7280;
+    --bg: #f7f8fa;
+    --white: #ffffff;
+    --danger: #dc2626;
+    --warn: #b45309;
+    --warn-bg: #fffaf0;
+    --warn-border: #f0d080;
+    --success: #15803d;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f4f8; color: #222; min-height: 100vh; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
   /* ── 헤더 ── */
   header {
-    background: #0d3b6e; color: #fff;
+    background: var(--white); color: var(--text);
     padding: 12px 24px;
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    border-bottom: 1px solid var(--border);
   }
-  header h1 { font-size: 1.05rem; font-weight: 700; white-space: nowrap; }
-  .subtitle  { font-size: .72rem; color: #a8c4e0; margin-top: 2px; white-space: nowrap; }
-  .header-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+  header h1 { font-size: 1.05rem; font-weight: 700; white-space: nowrap; color: var(--text); }
+  .subtitle  { font-size: .72rem; color: var(--text-dim); margin-top: 2px; white-space: nowrap; }
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
   @media (max-width: 640px) {
     header { flex-direction: column; align-items: flex-start; gap: 8px; }
     .header-right { width: 100%; justify-content: space-between; }
   }
-  #status { display: flex; align-items: center; gap: 8px; font-size: .82rem; white-space: nowrap; }
-  #dot { width: 10px; height: 10px; border-radius: 50%; background: #aaa; transition: background .3s; }
-  #dot.ok  { background: #4caf50; }
-  #dot.err { background: #f44336; }
-  #admin-badge { display: none; font-size: .75rem; background: #e8a020; color: #fff; padding: 3px 10px; border-radius: 12px; font-weight: 700; white-space: nowrap; }
-  #admin-badge.visible { display: inline-block; }
-  #btn-admin-login { font-size: .78rem; padding: 5px 14px; background: rgba(255,255,255,.15); color: #fff; border: 1.5px solid rgba(255,255,255,.4); border-radius: 7px; cursor: pointer; width: auto; font-weight: 600; transition: background .15s; white-space: nowrap; }
-  #btn-admin-login:hover { background: rgba(255,255,255,.28); }
+  #status { display: flex; align-items: center; gap: 8px; font-size: .8rem; white-space: nowrap; color: var(--text-dim); }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: #aaa; transition: background .3s; }
+  #dot.ok  { background: var(--success); }
+  #dot.err { background: var(--danger); }
+  #user-badge { font-size: .78rem; background: var(--blue-light); color: var(--blue-dark); padding: 4px 12px; border-radius: 20px; font-weight: 700; white-space: nowrap; border: 1px solid var(--blue-border); }
+  .hdr-btn { font-size: .78rem; padding: 6px 13px; background: var(--white); color: var(--text); border: 1.5px solid var(--border); border-radius: 7px; cursor: pointer; width: auto; font-weight: 600; transition: background .15s, border-color .15s; }
+  .hdr-btn:hover { background: var(--blue-light); border-color: var(--blue-border); color: var(--blue-dark); }
 
   /* ── 탭 ── */
-  .tab-nav { background: #0a2f58; display: flex; padding: 0 24px; gap: 4px; border-bottom: 3px solid #093050; overflow-x: auto; }
-  .tab-btn { padding: 10px 22px; font-size: .9rem; font-weight: 700; color: #a8c4e0; background: transparent; border: none; border-bottom: 3px solid transparent; margin-bottom: -3px; cursor: pointer; width: auto; white-space: nowrap; flex: 0 0 auto; transition: color .15s, border-color .15s; }
-  .tab-btn:hover { color: #fff; }
-  .tab-btn.tab-active { color: #fff; border-bottom-color: #4db6ff; }
+  .tab-nav { background: var(--white); display: flex; padding: 0 24px; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tab-btn { padding: 12px 22px; font-size: .9rem; font-weight: 700; color: var(--text-dim); background: transparent; border: none; border-bottom: 3px solid transparent; margin-bottom: -1px; cursor: pointer; width: auto; white-space: nowrap; flex: 0 0 auto; transition: color .15s, border-color .15s; }
+  .tab-btn:hover { color: var(--blue); }
+  .tab-btn.tab-active { color: var(--blue); border-bottom-color: var(--blue); }
   @media (max-width: 640px) {
     .tab-nav { padding: 0 8px; }
     .tab-btn { padding: 10px 12px; font-size: .82rem; }
@@ -51,193 +66,269 @@
   .tab-panel.panel-active { display: flex; }
 
   /* ── 카드 ── */
-  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.1); padding: 18px 20px; }
-  .card-label { font-size: .74rem; font-weight: 700; color: #0d3b6e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+  .card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .card-label { font-size: .74rem; font-weight: 700; color: var(--blue-dark); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
 
   /* ── 장비 정보 카드 ── */
   .device-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 520px) { .device-row { grid-template-columns: 1fr; } }
-  .device-row label { font-size: .75rem; font-weight: 600; color: #555; display: block; margin-bottom: 4px; }
-  .device-row input, .device-row select { width: 100%; border: 1.5px solid #d0d8e4; border-radius: 8px; padding: 8px 12px; font-size: .9rem; font-family: inherit; background: #fafbfd; transition: border-color .2s; appearance: none; }
-  .device-row input:focus, .device-row select:focus { outline: none; border-color: #0d3b6e; background: #fff; }
+  .device-row label { font-size: .75rem; font-weight: 600; color: var(--text-dim); display: block; margin-bottom: 4px; }
+  .device-row input, .device-row select { width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: .9rem; font-family: inherit; background: var(--white); transition: border-color .2s; appearance: none; }
+  .device-row input:focus, .device-row select:focus { outline: none; border-color: var(--blue); }
   .device-row select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; cursor: pointer; }
   .device-row select:disabled { color: #aaa; cursor: default; }
   #device-tag {
     display: none; margin-top: 10px;
     font-size: .78rem; padding: 4px 12px;
-    background: #e8f0fb; border: 1px solid #b0c8f0;
-    border-radius: 20px; color: #0d3b6e; font-weight: 600;
+    background: var(--blue-light); border: 1px solid var(--blue-border);
+    border-radius: 20px; color: var(--blue-dark); font-weight: 600;
     width: fit-content;
   }
 
   /* ── 입력 ── */
   textarea, input[type="text"], input[type="password"] {
-    width: 100%; border: 1.5px solid #d0d8e4; border-radius: 8px;
+    width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
     padding: 10px 12px; font-size: .9rem; font-family: inherit;
-    transition: border-color .2s; background: #fafbfd; line-height: 1.6;
+    transition: border-color .2s; background: var(--white); line-height: 1.6;
   }
   textarea { resize: vertical; }
-  textarea:focus, input[type="text"]:focus, input[type="password"]:focus { outline: none; border-color: #0d3b6e; background: #fff; }
+  textarea:focus, input[type="text"]:focus, input[type="password"]:focus { outline: none; border-color: var(--blue); }
   #question { min-height: 68px; }
 
   /* ── 버튼 ── */
-  button { width: 100%; padding: 13px; background: #0d3b6e; color: #fff; font-size: 1rem; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; transition: background .2s, opacity .2s; }
-  button:hover:not(:disabled) { background: #0a2f58; }
+  button { width: 100%; padding: 13px; background: var(--blue); color: #fff; font-size: 1rem; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; transition: background .2s, opacity .2s; }
+  button:hover:not(:disabled) { background: var(--blue-dark); }
   button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-secondary { background: var(--white); color: var(--text); border: 1.5px solid var(--border); }
+  .btn-secondary:hover:not(:disabled) { background: #f0f4f9; border-color: var(--blue-border); }
 
   /* ── 답변 ── */
-  #answer-box { min-height: 180px; border: 1.5px solid #d0d8e4; border-radius: 8px; padding: 14px; background: #fafbfd; font-size: .93rem; line-height: 1.8; white-space: pre-wrap; word-break: break-word; }
+  #answer-box { min-height: 180px; border: 1.5px solid var(--border); border-radius: 8px; padding: 14px; background: var(--white); font-size: .93rem; line-height: 1.8; white-space: pre-wrap; word-break: break-word; }
   #answer-box.empty    { color: #aaa; font-style: italic; }
-  #answer-box.streaming { border-color: #0d3b6e; }
-  #answer-box.err-state { border-color: #f44336; color: #c00; }
-  .cursor { display: inline-block; width: 2px; height: 1em; background: #0d3b6e; animation: blink .7s steps(1) infinite; vertical-align: text-bottom; margin-left: 1px; }
+  #answer-box.streaming { border-color: var(--blue); }
+  #answer-box.err-state { border-color: var(--danger); color: var(--danger); }
+  .cursor { display: inline-block; width: 2px; height: 1em; background: var(--blue); animation: blink .7s steps(1) infinite; vertical-align: text-bottom; margin-left: 1px; }
   @keyframes blink { 50% { opacity: 0; } }
   .answer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  #clear-btn { background: none; border: none; color: #888; font-size: .78rem; cursor: pointer; padding: 2px 6px; border-radius: 4px; width: auto; font-weight: 400; }
-  #clear-btn:hover { background: #f0f0f0; color: #444; }
-  #sources-box { display: none; margin-top: 10px; padding: 8px 12px; background: #eef3fb; border-left: 3px solid #0d3b6e; border-radius: 0 6px 6px 0; font-size: .78rem; color: #1a3a6b; line-height: 2; }
-  .src-chip { display: inline-block; background: #fff; border: 1px solid #a8c0e0; border-radius: 12px; padding: 1px 10px; margin: 2px 4px 2px 0; font-size: .75rem; color: #0d3b6e; white-space: nowrap; }
+  #clear-btn { background: none; border: none; color: var(--text-dim); font-size: .78rem; cursor: pointer; padding: 2px 6px; border-radius: 4px; width: auto; font-weight: 400; }
+  #clear-btn:hover { background: #f0f0f0; color: var(--text); }
+  #sources-box { display: none; margin-top: 10px; padding: 8px 12px; background: var(--blue-light); border-left: 3px solid var(--blue); border-radius: 0 6px 6px 0; font-size: .78rem; color: var(--blue-dark); line-height: 2; }
+  .src-chip { display: inline-block; background: var(--white); border: 1px solid var(--blue-border); border-radius: 12px; padding: 1px 10px; margin: 2px 4px 2px 0; font-size: .75rem; color: var(--blue-dark); white-space: nowrap; }
   .src-chip em { font-style: normal; color: #5580b0; }
 
   /* ── 바이브/하네스 토글 ── */
-  .mode-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-  .mode-label { font-size: .8rem; color: #555; }
-  .toggle-wrap { display: flex; border: 2px solid #0d3b6e; border-radius: 8px; overflow: hidden; }
+  .mode-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .mode-label { font-size: .8rem; color: var(--text-dim); }
+  .toggle-wrap { display: flex; border: 1.5px solid var(--blue); border-radius: 8px; overflow: hidden; }
   .toggle-wrap button { padding: 5px 14px; border: none; border-radius: 0; cursor: pointer; width: auto; font-weight: 700; font-size: .8rem; transition: background .15s, color .15s; }
-  .toggle-wrap .t-vibe, .toggle-wrap .t-harn { background: #fff; color: #0d3b6e; }
-  .toggle-wrap .t-active { background: #0d3b6e; color: #fff; }
+  .toggle-wrap .t-vibe, .toggle-wrap .t-harn { background: var(--white); color: var(--blue); }
+  .toggle-wrap .t-active { background: var(--blue); color: #fff; }
   .admin-only { display: none; }
   body.role-admin .admin-only, body.role-master .admin-only { display: block; }
   body.role-admin .admin-only.flex-display, body.role-master .admin-only.flex-display { display: flex; }
   .master-only { display: none; }
   body.role-master .master-only { display: block; }
 
-  /* ── 빠른 질문 칩 ── */
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .chip { font-size: .78rem; padding: 4px 12px; border: 1.5px solid #0d3b6e; border-radius: 20px; color: #0d3b6e; background: #f0f5fc; cursor: pointer; transition: background .15s; width: auto; font-weight: 500; }
-  .chip:hover { background: #dce8f8; }
-
-
   /* ── 업로드 자료 현황 ── */
   .docs-list-wrap { margin-top: 4px; }
   .docs-device-group { margin-bottom: 14px; }
   .docs-device-group:last-child { margin-bottom: 0; }
-  .docs-device-header { font-size: .82rem; font-weight: 700; color: #0d3b6e; padding: 6px 10px; background: #eef3fb; border-radius: 6px; margin-bottom: 4px; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; }
-  .docs-device-header:hover { background: #dce8f7; }
+  .docs-device-header { font-size: .82rem; font-weight: 700; color: var(--blue-dark); padding: 6px 10px; background: var(--blue-light); border-radius: 6px; margin-bottom: 4px; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; }
+  .docs-device-header:hover { background: #dfeafd; }
   .docs-device-caret { font-size: .75rem; transition: transform 0.2s; display: inline-block; }
   .docs-device-body { overflow: hidden; }
   .docs-device-body.collapsed { display: none; }
-  .docs-model-row { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; padding: 5px 10px; color: #333; border-bottom: 1px solid #f0f3f8; }
+  .docs-model-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; font-size: .8rem; padding: 5px 10px; color: var(--text); border-bottom: 1px solid #f0f3f8; }
   .docs-model-row:last-child { border-bottom: none; }
   .docs-model-name { display: flex; align-items: center; gap: 6px; }
-  .docs-chunk-badge { font-size: .72rem; background: #e8f0fb; color: #1a3a6b; border-radius: 10px; padding: 2px 9px; font-weight: 700; white-space: nowrap; }
-  .docs-del-btn { font-size: .7rem; padding: 2px 8px; background: #f0f0f0; color: #c00; border: 1px solid #ddd; border-radius: 6px; width: auto; cursor: pointer; }
-  .docs-del-btn:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+  .docs-model-actions { display: flex; gap: 6px; }
+  .docs-chunk-badge { font-size: .72rem; background: var(--blue-light); color: var(--blue-dark); border-radius: 10px; padding: 2px 9px; font-weight: 700; white-space: nowrap; }
+  .docs-del-btn { font-size: .7rem; padding: 2px 8px; background: #f0f0f0; color: var(--danger); border: 1px solid #ddd; border-radius: 6px; width: auto; cursor: pointer; white-space: nowrap; }
+  .docs-del-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .docs-dl-btn { font-size: .7rem; padding: 2px 8px; background: var(--blue-light); color: var(--blue-dark); border: 1px solid var(--blue-border); border-radius: 6px; width: auto; cursor: pointer; white-space: nowrap; }
+  .docs-dl-btn:hover { background: var(--blue); color: #fff; }
   .docs-empty { font-size: .83rem; color: #aaa; text-align: center; padding: 20px 0; }
 
   /* ── 자료 업로드 ── */
   .upload-device-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
   @media (max-width: 520px) { .upload-device-row { grid-template-columns: 1fr; } }
-  .upload-device-row label { font-size: .75rem; font-weight: 600; color: #555; display: block; margin-bottom: 4px; }
-  .upload-device-row input { width: 100%; border: 1.5px solid #d0d8e4; border-radius: 8px; padding: 8px 12px; font-size: .9rem; font-family: inherit; background: #fafbfd; }
-  .upload-device-row input:focus { outline: none; border-color: #1a5276; background: #fff; }
-  .upload-drop-zone { border: 2.5px dashed #a8c0e0; border-radius: 12px; padding: 36px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; background: #f7faff; color: #5577aa; }
-  .upload-drop-zone:hover, .upload-drop-zone.dragover { border-color: #0d3b6e; background: #eef3fb; color: #0d3b6e; }
+  .upload-device-row label { font-size: .75rem; font-weight: 600; color: var(--text-dim); display: block; margin-bottom: 4px; }
+  .upload-device-row input { width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: .9rem; font-family: inherit; background: var(--white); }
+  .upload-device-row input:focus { outline: none; border-color: var(--blue); }
+  .template-dl-btn { margin-bottom: 14px; background: var(--white); color: var(--blue-dark); border: 1.5px solid var(--blue-border); }
+  .template-dl-btn:hover { background: var(--blue-light); }
+  .upload-drop-zone { border: 2.5px dashed var(--blue-border); border-radius: 12px; padding: 36px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; background: var(--blue-light); color: var(--blue-dark); }
+  .upload-drop-zone:hover, .upload-drop-zone.dragover { border-color: var(--blue); background: #e3edfd; }
   .upload-drop-zone .drop-icon { font-size: 2.2rem; margin-bottom: 8px; }
   .upload-drop-zone p { font-size: .88rem; margin-bottom: 4px; }
-  .upload-drop-zone small { font-size: .75rem; color: #99aabb; }
-  .selected-file { font-size: .82rem; color: #0d3b6e; margin-top: 10px; font-weight: 600; display: none; }
-  #upload-btn { margin-top: 12px; background: #1a5276; }
-  #upload-btn:hover:not(:disabled) { background: #154360; }
-  #reset-docs-btn { margin-top: 8px; background: #6c757d; font-size: .85rem; padding: 9px; }
-  #reset-docs-btn:hover:not(:disabled) { background: #545b62; }
-  .docs-del-btn.req-btn { background: #a04000; }
-  .docs-del-btn.req-btn:hover { background: #7a3000; }
+  .upload-drop-zone small { font-size: .75rem; color: #7c93b8; }
+  .selected-file { font-size: .82rem; color: var(--blue-dark); margin-top: 10px; font-weight: 600; display: none; }
+  #upload-btn { margin-top: 12px; }
+  .docs-del-btn.req-btn { background: #fdeee0; color: var(--warn); border-color: #f0c890; }
+  .docs-del-btn.req-btn:hover { background: var(--warn); color: #fff; }
   #upload-status { margin-top: 14px; font-size: .85rem; line-height: 1.6; }
-  #upload-status.ok   { color: #1a6b3a; }
-  #upload-status.err  { color: #c00; }
-  #upload-status.info { color: #0d3b6e; }
-  .upload-preview { margin-top: 14px; background: #f4f7fb; border-radius: 8px; padding: 12px 14px; font-size: .78rem; line-height: 1.6; color: #334; max-height: 260px; overflow-y: auto; border: 1px solid #d0d8e4; display: none; }
-  .upload-preview h4 { font-size: .78rem; color: #0d3b6e; margin-bottom: 6px; }
+  #upload-status.ok   { color: var(--success); }
+  #upload-status.err  { color: var(--danger); }
+  #upload-status.info { color: var(--blue-dark); }
+  .upload-preview { margin-top: 14px; background: #f4f7fb; border-radius: 8px; padding: 12px 14px; font-size: .78rem; line-height: 1.6; color: #334; max-height: 260px; overflow-y: auto; border: 1px solid var(--border); display: none; }
+  .upload-preview h4 { font-size: .78rem; color: var(--blue-dark); margin-bottom: 6px; }
   .preview-chunk { border-bottom: 1px solid #dde4ef; padding-bottom: 8px; margin-bottom: 8px; white-space: pre-wrap; }
   .preview-chunk:last-child { border-bottom: none; margin-bottom: 0; }
+  .template-table { width: 100%; border-collapse: collapse; font-size: .78rem; margin-top: 8px; }
+  .template-table th { background: var(--blue-light); color: var(--blue-dark); font-weight: 700; padding: 6px 8px; text-align: left; border: 1px solid var(--border); white-space: nowrap; }
+  .template-table td { padding: 6px 8px; border: 1px solid var(--border); color: #555; vertical-align: top; }
 
-  /* ── 모달 ── */
-  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 9999; align-items: center; justify-content: center; }
-  #modal-overlay.open { display: flex; }
-  #modal { background: #fff; border-radius: 14px; padding: 32px 28px; width: 340px; max-width: 90vw; box-shadow: 0 8px 40px rgba(0,0,0,.3); display: flex; flex-direction: column; gap: 14px; }
-  #modal h2 { font-size: 1.05rem; font-weight: 700; color: #0d3b6e; }
-  #modal p  { font-size: .82rem; color: #666; line-height: 1.5; }
-  #modal-id { font-size: .95rem; }
-  #modal-pw { font-size: .95rem; letter-spacing: .1em; }
-  #modal-err { font-size: .78rem; color: #c00; min-height: 1em; }
+  /* ── 로그인 게이트 / 강제 비밀번호 변경 ── */
+  .gate-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #login-gate[hidden], #pw-force-gate[hidden], #app-shell[hidden] { display: none; }
+  .gate-box { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 34px 30px; width: 380px; max-width: 100%; box-shadow: 0 4px 24px rgba(20,30,60,.06); display: flex; flex-direction: column; gap: 14px; }
+  .gate-box h1 { font-size: 1.2rem; font-weight: 800; color: var(--text); text-align: center; }
+  .gate-box .gate-sub { font-size: .8rem; color: var(--text-dim); text-align: center; margin-top: -8px; margin-bottom: 4px; }
+  .gate-box h2 { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+  .gate-box p.gate-desc { font-size: .82rem; color: var(--text-dim); line-height: 1.5; }
+  #gate-err, #force-pw-err { font-size: .78rem; color: var(--danger); min-height: 1em; }
+  .gate-links { display: flex; justify-content: space-between; gap: 10px; margin-top: 2px; }
+  .gate-link-btn { background: none; border: none; color: var(--blue); font-size: .78rem; cursor: pointer; text-decoration: underline; padding: 0; width: auto; font-weight: 600; }
+  .gate-link-btn:hover { color: var(--blue-dark); }
+  .gate-back-btn { background: none; border: none; color: var(--text-dim); font-size: .78rem; cursor: pointer; text-decoration: underline; padding: 0; width: auto; margin-top: 2px; }
+
+  /* ── 모달 (비밀번호 변경) ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 9999; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: var(--white); border-radius: 14px; padding: 30px 26px; width: 340px; max-width: 90vw; box-shadow: 0 8px 40px rgba(0,0,0,.2); display: flex; flex-direction: column; gap: 14px; }
+  .modal-box h2 { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+  .modal-box p  { font-size: .82rem; color: var(--text-dim); line-height: 1.5; }
   .modal-btns { display: flex; gap: 10px; }
   .modal-btns button { padding: 10px; font-size: .9rem; }
-  #modal-cancel { background: #eee; color: #444; }
-  #modal-cancel:hover { background: #ddd; }
 
   /* ── 사용자 관리 ── */
-  .user-mgmt-section { margin-bottom: 20px; }
-  .user-mgmt-section h3 { font-size: .88rem; font-weight: 700; color: #0d3b6e; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #dce8f7; }
   .admin-table-wrap { overflow-x: auto; }
   .admin-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-  .admin-table th { background: #eef3fb; color: #0d3b6e; font-weight: 700; padding: 7px 10px; text-align: left; white-space: nowrap; }
-  .admin-table td { padding: 7px 10px; border-bottom: 1px solid #f0f3f8; color: #333; vertical-align: middle; white-space: nowrap; }
+  .admin-table th { background: var(--blue-light); color: var(--blue-dark); font-weight: 700; padding: 7px 10px; text-align: left; white-space: nowrap; }
+  .admin-table td { padding: 7px 10px; border-bottom: 1px solid #f0f3f8; color: var(--text); vertical-align: middle; white-space: nowrap; }
   .admin-table tr:last-child td { border-bottom: none; }
   .role-badge { display: inline-block; font-size: .7rem; padding: 2px 8px; border-radius: 10px; font-weight: 700; white-space: nowrap; }
-  .role-badge.master { background: #0d3b6e; color: #fff; }
-  .role-badge.admin  { background: #e8f0fb; color: #1a3a6b; }
-  .admin-del-btn { font-size: .7rem; padding: 2px 8px; background: #f0f0f0; color: #c00; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; width: auto; white-space: nowrap; }
-  .admin-del-btn:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+  .role-badge.master { background: var(--blue); color: #fff; }
+  .role-badge.admin  { background: var(--blue-light); color: var(--blue-dark); }
+  .role-badge.user   { background: #f1f5f9; color: var(--text-dim); }
+  .role-select { font-size: .78rem; padding: 4px 8px; border: 1.5px solid var(--border); border-radius: 6px; background: var(--white); width: auto; }
+  .admin-del-btn { font-size: .7rem; padding: 2px 8px; background: #f0f0f0; color: var(--danger); border: 1px solid #ddd; border-radius: 6px; cursor: pointer; width: auto; white-space: nowrap; }
+  .admin-del-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
   .add-admin-row { display: flex; gap: 8px; margin-top: 10px; }
   .add-admin-row input { flex: 1; font-size: .88rem; }
   .add-admin-row button { width: auto; padding: 8px 16px; font-size: .88rem; }
-  /* ── 비밀번호 변경 ── */
+  /* ── 비밀번호 변경 폼 ── */
   .pw-change-form { display: flex; flex-direction: column; gap: 8px; }
   .pw-change-form input { font-size: .88rem; }
-  .pw-change-form button { width: auto; align-self: flex-start; padding: 8px 18px; font-size: .88rem; }
   .pw-change-msg { font-size: .78rem; min-height: 1.2em; }
-  /* ── 초기화 요청 알림 ── */
-  .reset-req-card { background: #fff8f0; border: 1.5px solid #e8a000; border-radius: 10px; }
-  .reset-req-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #fde8c0; font-size: .82rem; }
-  .reset-req-row:last-child { border-bottom: none; }
-  .reset-req-info { color: #333; }
-  .reset-req-actions { display: flex; gap: 6px; }
-  .reset-btn-do   { font-size: .72rem; padding: 3px 10px; background: #0d3b6e; color: #fff; border: none; border-radius: 6px; cursor: pointer; width: auto; white-space: nowrap; }
-  .reset-btn-do:hover { background: #0a2f58; }
-  .reset-btn-skip { font-size: .72rem; padding: 3px 10px; background: #eee; color: #555; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; width: auto; white-space: nowrap; }
-  .reset-btn-skip:hover { background: #ddd; }
-  .no-reset-req { font-size: .82rem; color: #aaa; text-align: center; padding: 14px 0; }
+  /* ── 요청 목록 카드 ── */
+  .req-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid #f0f3f8; font-size: .82rem; }
+  .req-row:last-child { border-bottom: none; }
+  .req-info { color: var(--text); }
+  .req-actions { display: flex; gap: 6px; }
+  .req-btn-do   { font-size: .72rem; padding: 3px 10px; background: var(--blue); color: #fff; border: none; border-radius: 6px; cursor: pointer; width: auto; white-space: nowrap; }
+  .req-btn-do:hover { background: var(--blue-dark); }
+  .req-btn-skip { font-size: .72rem; padding: 3px 10px; background: #f0f0f0; color: var(--text-dim); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; width: auto; white-space: nowrap; }
+  .req-btn-skip:hover { background: #e2e6ea; }
+  .no-req { font-size: .82rem; color: #aaa; text-align: center; padding: 14px 0; }
   /* ── 미해결 질문 ── */
-  .unanswered-row { padding: 10px 12px; border-bottom: 1px solid #fde8c0; }
+  .unanswered-row { padding: 10px 12px; border-bottom: 1px solid #f0f3f8; }
   .unanswered-row:last-child { border-bottom: none; }
   .unanswered-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; color: #999; font-size: .74rem; margin-bottom: 5px; }
-  .unanswered-q { color: #222; font-weight: 600; font-size: .84rem; margin-bottom: 4px; word-break: break-word; }
+  .unanswered-q { color: var(--text); font-weight: 600; font-size: .84rem; margin-bottom: 4px; word-break: break-word; }
   .unanswered-a { color: #666; font-size: .8rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
   /* 탭 버튼 배지 */
-  .tab-badge { display: inline-block; background: #e03030; color: #fff; font-size: .62rem; font-weight: 700; border-radius: 8px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; line-height: 1.4; }
-  /* 모달 초기화 요청 모드 */
-  #modal-reset-section { display: none; }
-  #modal-reset-section.visible { display: block; }
-  #modal-login-section.hidden { display: none; }
-  .modal-link-btn { background: none; border: none; color: #1a5fad; font-size: .78rem; cursor: pointer; text-decoration: underline; padding: 0; width: auto; margin-top: 2px; }
-  .modal-link-btn:hover { color: #0d3b6e; }
+  .tab-badge { display: inline-block; background: var(--danger); color: #fff; font-size: .62rem; font-weight: 700; border-radius: 8px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; line-height: 1.4; }
   /* ── 활동 로그 ── */
   .log-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
-  .log-table th { background: #eef3fb; color: #0d3b6e; font-weight: 700; padding: 6px 8px; text-align: left; white-space: nowrap; }
-  .log-table td { padding: 5px 8px; border-bottom: 1px solid #f0f3f8; color: #333; vertical-align: top; }
+  .log-table th { background: var(--blue-light); color: var(--blue-dark); font-weight: 700; padding: 6px 8px; text-align: left; white-space: nowrap; }
+  .log-table td { padding: 5px 8px; border-bottom: 1px solid #f0f3f8; color: var(--text); vertical-align: top; }
   .log-table tr:last-child td { border-bottom: none; }
   .log-table td:first-child { color: #888; white-space: nowrap; font-size: .72rem; }
-  .log-wrap { max-height: 340px; overflow-y: auto; overflow-x: auto; border: 1px solid #e0e8f5; border-radius: 6px; }
+  .log-wrap { max-height: 340px; overflow-y: auto; overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; }
   /* ── 관리자 추가 2열 ── */
   .add-admin-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 10px; align-items: start; }
+
+  /* ── 설정 서브메뉴 ── */
+  .settings-layout { display: flex; gap: 20px; align-items: flex-start; }
+  .settings-menu { display: flex; flex-direction: column; gap: 4px; min-width: 190px; flex: 0 0 190px; }
+  .settings-menu-item { width: auto; text-align: left; background: var(--white); color: var(--text); border: 1.5px solid var(--border); font-weight: 600; font-size: .84rem; padding: 10px 14px; white-space: nowrap; }
+  .settings-menu-item:hover { background: var(--blue-light); }
+  .settings-menu-item.active { background: var(--blue-light); color: var(--blue-dark); border-color: var(--blue-border); }
+  .settings-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .settings-pane { display: none; flex-direction: column; gap: 16px; }
+  .settings-pane.active { display: flex; }
+  @media (max-width: 700px) {
+    .settings-layout { flex-direction: column; }
+    .settings-menu { flex-direction: row; overflow-x: auto; min-width: 0; flex: 0 0 auto; width: 100%; }
+    .settings-menu-item { flex: 0 0 auto; }
+  }
 </style>
-<!-- 외부 인증 위젯 (토큰 자동 주입) -->
-<script src="http://121.138.151.6:8091/auth-widget.js"></script>
 </head>
 <body>
 
-<!-- ── 헤더 ── -->
+<!-- ── 로그인 게이트 ── -->
+<div id="login-gate" class="gate-wrap">
+  <div class="gate-box">
+    <h1>🩺 의료기기 관리형 챗봇</h1>
+    <div class="gate-sub">RAG 기반 응답 · 장비별 매뉴얼 검색</div>
+
+    <!-- 로그인 -->
+    <div id="gate-login">
+      <input id="login-id" type="text" placeholder="사번 입력"
+             onkeydown="if(event.key==='Enter') document.getElementById('login-pw').focus()" />
+      <input id="login-pw" type="password" placeholder="비밀번호 입력"
+             onkeydown="if(event.key==='Enter') doLogin()" />
+      <div id="gate-err"></div>
+      <button onclick="doLogin()">로그인</button>
+      <div class="gate-links">
+        <button class="gate-link-btn" onclick="showResetSection()">비밀번호를 잊으셨나요?</button>
+        <button class="gate-link-btn" onclick="showAccessSection()">사용 권한 요청</button>
+      </div>
+    </div>
+
+    <!-- 비밀번호 초기화 요청 -->
+    <div id="gate-reset" hidden>
+      <h2>🔓 비밀번호 초기화 요청</h2>
+      <p class="gate-desc">사번을 입력하면 마스터 관리자에게 초기화 요청이 전달됩니다.</p>
+      <input id="reset-id" type="text" placeholder="사번 입력"
+             onkeydown="if(event.key==='Enter') submitResetRequest()" />
+      <div id="reset-msg" style="font-size:.78rem;min-height:1em;"></div>
+      <button onclick="submitResetRequest()">요청 전송</button>
+      <button class="gate-back-btn" onclick="showLoginSection()">← 로그인으로 돌아가기</button>
+    </div>
+
+    <!-- 사용 권한 요청 -->
+    <div id="gate-access" hidden>
+      <h2>🙋 사용 권한 요청</h2>
+      <p class="gate-desc">사번·이름·소속부서를 입력하면 마스터 관리자가 검토 후 계정을 발급합니다.</p>
+      <input id="access-id"   type="text" placeholder="사번 입력" />
+      <input id="access-name" type="text" placeholder="이름 입력" />
+      <input id="access-dept" type="text" placeholder="소속부서 입력"
+             onkeydown="if(event.key==='Enter') submitAccessRequest()" />
+      <div id="access-msg" style="font-size:.78rem;min-height:1em;"></div>
+      <button onclick="submitAccessRequest()">요청 전송</button>
+      <button class="gate-back-btn" onclick="showLoginSection()">← 로그인으로 돌아가기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 강제 비밀번호 변경 ── -->
+<div id="pw-force-gate" class="gate-wrap" hidden>
+  <div class="gate-box">
+    <h2>🔒 비밀번호 변경이 필요합니다</h2>
+    <p class="gate-desc">최초 로그인 또는 초기화 이후에는 새 비밀번호로 변경해야 계속 이용할 수 있습니다.</p>
+    <input id="force-pw-new"  type="password" placeholder="새 비밀번호 (6자 이상)" />
+    <input id="force-pw-new2" type="password" placeholder="새 비밀번호 확인"
+           onkeydown="if(event.key==='Enter') submitForcePw()" />
+    <div id="force-pw-err"></div>
+    <button onclick="submitForcePw()">변경하고 시작하기</button>
+  </div>
+</div>
+
+<!-- ── 앱 본문 ── -->
+<div id="app-shell" hidden>
+
 <header>
   <div>
     <h1>의료기기 관리형 챗봇</h1>
@@ -245,8 +336,9 @@
   </div>
   <div class="header-right">
     <div id="status"><div id="dot"></div><span id="status-text">연결 확인 중…</span></div>
-    <span id="admin-badge">🔑 관리자 모드</span>
-    <button id="btn-admin-login" onclick="openAdminModal()">관리자 로그인</button>
+    <span id="user-badge"></span>
+    <button class="hdr-btn" onclick="openPwModal()">비밀번호 변경</button>
+    <button class="hdr-btn" onclick="doLogout()">로그아웃</button>
   </div>
 </header>
 
@@ -254,7 +346,7 @@
 <nav class="tab-nav">
   <button class="tab-btn tab-active" id="tab-failure" onclick="switchTab('failure')">🔧 고장 대응</button>
   <button class="tab-btn tab-admin"  id="tab-upload"  onclick="switchTab('upload')">📁 자료 업로드</button>
-  <button class="tab-btn tab-admin"  id="tab-settings" onclick="switchTab('settings')">⚙️ 설정</button>
+  <button class="tab-btn tab-master" id="tab-settings" onclick="switchTab('settings')">⚙️ 설정</button>
 </nav>
 
 <main>
@@ -282,9 +374,9 @@
       <div id="device-tag"></div>
     </div>
 
-    <!-- 질문 + 오류 코드 검색 (하나의 카드) -->
+    <!-- 질문 -->
     <div class="card">
-      <!-- 바이브/하네스 토글 (관리자 전용) -->
+      <!-- 바이브/하네스 토글 (마스터 전용) -->
       <div class="mode-bar master-only flex-display">
         <span class="mode-label">응답 모드:</span>
         <div class="toggle-wrap">
@@ -296,13 +388,6 @@
 
       <!-- 질문 입력 -->
       <textarea id="question" placeholder="예) 폐색 알람이 울리면 어떻게 해야 하나요?"></textarea>
-      <div class="chips">
-        <button class="chip" onclick="setQ('폐색 알람(AL-OCC)이 발생했을 때 조치 방법은?')">폐색 알람 조치</button>
-        <button class="chip" onclick="setQ('공기 알람(AL-AIR) 발생 시 어떻게 처리하나요?')">공기 알람 처리</button>
-        <button class="chip" onclick="setQ('배터리 교체 기준이 어떻게 되나요?')">배터리 교체 기준</button>
-        <button class="chip" onclick="setQ('소독 및 세척 절차를 알려줘.')">세척·소독 절차</button>
-        <button class="chip" onclick="setQ('정기 점검 항목을 알려줘.')">정기 점검 항목</button>
-      </div>
 
       <button id="send-btn" style="margin-top:14px;" onclick="sendQuestion()">질문하기</button>
     </div>
@@ -319,12 +404,14 @@
 
   </div><!-- /panel-failure -->
 
-  <!-- ══ 자료 업로드 패널 (관리자 전용) ══ -->
+  <!-- ══ 자료 업로드 패널 (관리자 이상) ══ -->
   <div id="panel-upload" class="tab-panel">
 
     <!-- ① 매뉴얼 업로드 -->
     <div class="card">
-      <div class="card-label">📄 매뉴얼 업로드</div>
+      <div class="card-label">📄 매뉴얼 업로드 (엑셀 표준 양식)</div>
+
+      <button class="template-dl-btn" onclick="downloadTemplate()">📥 표준 양식 다운로드 (.xlsx)</button>
 
       <!-- 업로드 대상 장비/모델 지정 -->
       <div class="upload-device-row">
@@ -339,23 +426,20 @@
       </div>
 
       <div class="upload-drop-zone" id="drop-zone"
-           onclick="document.getElementById('pdf-input').click()"
+           onclick="document.getElementById('xlsx-input').click()"
            ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
-        <div class="drop-icon">📂</div>
-        <p><strong>클릭하거나 파일을 드래그해서 업로드</strong></p>
-        <small>스캔본(이미지 PDF)도 OCR로 자동 처리 · 문제 해결 / 오류 코드 섹션 자동 추출</small>
+        <div class="drop-icon">📊</div>
+        <p><strong>클릭하거나 엑셀 파일을 드래그해서 업로드</strong></p>
+        <small>표준 양식(분류 · 제목 · 내용 · 참고페이지)에 맞춰 작성된 .xlsx 파일만 업로드할 수 있습니다</small>
       </div>
-      <div style="margin-top:8px;font-size:.75rem;color:#888;text-align:center;">
-        📎 업로드 가능 형식: <strong>PDF</strong> (.pdf) &nbsp;·&nbsp; <strong>Word</strong> (.docx) &nbsp;·&nbsp; <strong>Excel</strong> (.xlsx)
-      </div>
-      <input type="file" id="pdf-input" accept=".pdf,.docx,.xlsx" style="display:none" onchange="onFileSelected(this)" />
+      <input type="file" id="xlsx-input" accept=".xlsx" style="display:none" onchange="onFileSelected(this)" />
       <div id="selected-file" class="selected-file"></div>
 
-      <button id="upload-btn" onclick="uploadPDF()" style="margin-top:12px;" disabled>업로드 및 파싱 시작</button>
+      <button id="upload-btn" onclick="uploadDocs()" style="margin-top:12px;" disabled>업로드 시작</button>
 
       <div id="upload-status"></div>
       <div class="upload-preview" id="upload-preview">
-        <h4>추출된 조각 미리보기 (앞 3개)</h4>
+        <h4>업로드된 항목 미리보기 (앞 3개)</h4>
         <div id="preview-content"></div>
       </div>
     </div>
@@ -364,7 +448,7 @@
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <div class="card-label" style="margin-bottom:0;">📚 현재 업로드된 자료</div>
-        <button onclick="loadDeviceList()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
+        <button onclick="loadDeviceList()" style="width:auto;padding:4px 14px;font-size:.76rem;">새로고침</button>
       </div>
       <div class="docs-list-wrap" id="docs-list-wrap">
         <div class="docs-empty">자료를 불러오는 중…</div>
@@ -372,136 +456,148 @@
     </div>
 
     <!-- ③ 업로드 안내 -->
-    <div class="card" style="background:#fffbf0; border:1px solid #f0d080;">
-      <div class="card-label" style="color:#7a5800;">📌 업로드 안내</div>
+    <div class="card" style="background:var(--warn-bg); border:1px solid var(--warn-border);">
+      <div class="card-label" style="color:var(--warn);">📌 표준 양식 안내</div>
       <ul style="font-size:.82rem; line-height:2; color:#555; padding-left:1.2em;">
-        <li>PDF에 <strong>문제 해결, Troubleshooting, Error Code</strong> 섹션이 있으면 자동 추출됩니다.</li>
-        <li>스캔 이미지 PDF는 OCR로 처리합니다 (서버에 <code>pytesseract</code> + Tesseract-OCR 필요).</li>
+        <li>PDF·Word는 더 이상 지원하지 않습니다. 매뉴얼 내용을 아래 표 형식의 <strong>엑셀(.xlsx)</strong>로 정리해 업로드해 주세요.</li>
+        <li><strong>제목</strong>·<strong>내용</strong> 열은 필수, <strong>분류</strong>·<strong>참고페이지</strong>는 선택입니다.</li>
         <li>장비명·모델명을 입력하면 해당 장비로 태깅되어 <strong>장비별 검색</strong>에 활용됩니다.</li>
-        <li>같은 장비/모델로 재업로드하면 이전 자료가 <strong>교체</strong>됩니다.</li>
-        <li>업로드 자료는 서버에 <strong>영구 저장</strong>됩니다. 삭제 버튼으로만 제거됩니다.</li>
+        <li>같은 장비/모델로 재업로드하면 이전 자료가 <strong>전체 교체</strong>됩니다.</li>
+        <li>답변을 찾지 못한 질문은 설정 → "답변을 찾지 못한 질문"에서 확인 후, 아래 <strong>다운로드</strong> 버튼으로 현재 자료를 받아 보강·재업로드하세요.</li>
       </ul>
+      <table class="template-table">
+        <thead><tr><th>분류</th><th>제목</th><th>내용</th><th>참고페이지</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>알람</td><td>AL-OCC 폐색 알람</td>
+            <td>1) 증상: 튜빙 폐색 시 경보 발생&#10;2) 점검: 라인 꺾임·클램프 확인&#10;3) 조치: 폐색 해제 후 리셋</td>
+            <td>p.12</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
-  <!-- ══ 설정 패널 (관리자 공통 / 사용자 관리 섹션은 마스터 전용) ══ -->
+  <!-- ══ 설정 패널 (마스터 전용) ══ -->
   <div id="panel-settings" class="tab-panel">
+    <div class="settings-layout">
+      <nav class="settings-menu">
+        <button class="settings-menu-item active" data-pane="access"     onclick="switchSettingsPane('access')">🙋 사용 권한 요청</button>
+        <button class="settings-menu-item"        data-pane="resetreq"   onclick="switchSettingsPane('resetreq')">🔔 비밀번호 초기화 요청</button>
+        <button class="settings-menu-item"        data-pane="docdel"     onclick="switchSettingsPane('docdel')">📂 매뉴얼 삭제 요청</button>
+        <button class="settings-menu-item"        data-pane="unanswered" onclick="switchSettingsPane('unanswered')">❓ 답변을 찾지 못한 질문</button>
+        <button class="settings-menu-item"        data-pane="users"      onclick="switchSettingsPane('users')">👥 사용자 현황</button>
+        <button class="settings-menu-item"        data-pane="log"        onclick="switchSettingsPane('log')">📋 활동 로그</button>
+      </nav>
 
-    <!-- ⓪ 비밀번호 초기화 요청 알림 (마스터 전용) -->
-    <div class="card master-only reset-req-card" id="reset-requests-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div class="card-label" style="margin-bottom:0;color:#b86000;">🔔 비밀번호 초기화 요청</div>
-        <button onclick="loadResetRequests()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
-      </div>
-      <div id="reset-requests-list"><div class="no-reset-req">요청 없음</div></div>
-    </div>
+      <div class="settings-content">
 
-    <!-- 📂 매뉴얼 삭제 요청 (마스터 전용) -->
-    <div class="card master-only reset-req-card" id="doc-delete-requests-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div class="card-label" style="margin-bottom:0;color:#1a5276;">📂 매뉴얼 삭제 요청</div>
-        <button onclick="loadDocDeleteRequests()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
-      </div>
-      <div id="doc-delete-requests-list"><div class="no-reset-req">요청 없음</div></div>
-    </div>
-
-    <!-- ❓ 답변을 찾지 못한 질문 (마스터 전용) -->
-    <div class="card master-only reset-req-card" id="unanswered-questions-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div class="card-label" style="margin-bottom:0;color:#8a2b11;">❓ 답변을 찾지 못한 질문</div>
-        <button onclick="loadUnansweredQuestions()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
-      </div>
-      <p style="font-size:.78rem;color:#888;margin:0 0 10px">업로드된 자료에서 답을 찾지 못해 "해당 내용에 대한 답을 찾을 수 없습니다"로 응답한 대화입니다. 매뉴얼 보강에 참고하세요.</p>
-      <div id="unanswered-questions-list"><div class="no-reset-req">해당 질문 없음</div></div>
-    </div>
-
-    <!-- ① 관리자 현황 (마스터 전용) -->
-    <div class="card master-only">
-      <div class="card-label">👥 관리자 현황</div>
-      <div class="user-mgmt-section">
-        <div class="admin-table-wrap">
-          <table class="admin-table" id="admin-user-table">
-            <thead><tr><th>사번</th><th>이름</th><th>권한</th><th>비밀번호</th><th>삭제</th></tr></thead>
-            <tbody id="admin-user-tbody"><tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">불러오는 중…</td></tr></tbody>
-          </table>
+        <!-- 사용 권한 요청 -->
+        <div class="settings-pane active" id="pane-access">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div class="card-label" style="margin-bottom:0;">🙋 사용 권한 요청</div>
+              <button onclick="loadAccessRequests()" style="width:auto;padding:4px 14px;font-size:.76rem;">새로고침</button>
+            </div>
+            <p style="font-size:.78rem;color:var(--text-dim);margin:0 0 8px">승인 시 사용자(user) 권한으로 계정이 생성되며, 최초 로그인 후 비밀번호 변경이 필수입니다.</p>
+            <div id="access-requests-list"><div class="no-req">요청 없음</div></div>
+          </div>
         </div>
-      </div>
 
-      <!-- 관리자 추가 -->
-      <div class="user-mgmt-section">
-        <h3>➕ 관리자 추가</h3>
-        <p style="font-size:.82rem;color:#555;margin:0 0 8px">초기 비밀번호 <code>admin1234</code>로 등록됩니다.</p>
-        <div class="add-admin-grid">
-          <input id="new-admin-id"   type="text" placeholder="사번 입력" />
-          <input id="new-admin-name" type="text" placeholder="이름 입력" />
-          <button onclick="addAdmin()" style="padding:8px 16px;font-size:.88rem;white-space:nowrap;">등록</button>
+        <!-- 비밀번호 초기화 요청 -->
+        <div class="settings-pane" id="pane-resetreq">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div class="card-label" style="margin-bottom:0;">🔔 비밀번호 초기화 요청</div>
+              <button onclick="loadResetRequests()" style="width:auto;padding:4px 14px;font-size:.76rem;">새로고침</button>
+            </div>
+            <div id="reset-requests-list"><div class="no-req">요청 없음</div></div>
+          </div>
         </div>
-        <div id="add-admin-msg" class="pw-change-msg" style="margin-top:6px"></div>
+
+        <!-- 매뉴얼 삭제 요청 -->
+        <div class="settings-pane" id="pane-docdel">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div class="card-label" style="margin-bottom:0;">📂 매뉴얼 삭제 요청</div>
+              <button onclick="loadDocDeleteRequests()" style="width:auto;padding:4px 14px;font-size:.76rem;">새로고침</button>
+            </div>
+            <div id="doc-delete-requests-list"><div class="no-req">요청 없음</div></div>
+          </div>
+        </div>
+
+        <!-- 답변을 찾지 못한 질문 -->
+        <div class="settings-pane" id="pane-unanswered">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div class="card-label" style="margin-bottom:0;">❓ 답변을 찾지 못한 질문</div>
+              <button onclick="loadUnansweredQuestions()" style="width:auto;padding:4px 14px;font-size:.76rem;">새로고침</button>
+            </div>
+            <p style="font-size:.78rem;color:var(--text-dim);margin:0 0 10px">업로드된 자료에서 답을 찾지 못해 "해당 내용에 대한 답을 찾을 수 없습니다"로 응답한 대화입니다. 자료 업로드 탭에서 해당 장비 자료를 다운로드해 보강한 뒤 재업로드하세요.</p>
+            <div id="unanswered-questions-list"><div class="no-req">해당 질문 없음</div></div>
+          </div>
+        </div>
+
+        <!-- 사용자 현황 -->
+        <div class="settings-pane" id="pane-users">
+          <div class="card">
+            <div class="card-label">👥 사용자 현황</div>
+            <div class="admin-table-wrap">
+              <table class="admin-table" id="admin-user-table">
+                <thead><tr><th>사번</th><th>이름</th><th>소속부서</th><th>권한</th><th>비밀번호</th><th>삭제</th></tr></thead>
+                <tbody id="admin-user-tbody"><tr><td colspan="6" style="color:#aaa;text-align:center;padding:16px">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-label">➕ 관리자 추가</div>
+            <p style="font-size:.82rem;color:var(--text-dim);margin:0 0 8px">초기 비밀번호 <code>admin1234</code>로 등록되며, 최초 로그인 후 비밀번호 변경이 필수입니다.</p>
+            <div class="add-admin-grid">
+              <input id="new-admin-id"   type="text" placeholder="사번 입력" />
+              <input id="new-admin-name" type="text" placeholder="이름 입력" />
+              <button onclick="addAdmin()" style="padding:8px 16px;font-size:.88rem;white-space:nowrap;">등록</button>
+            </div>
+            <div id="add-admin-msg" class="pw-change-msg" style="margin-top:6px"></div>
+          </div>
+        </div>
+
+        <!-- 활동 로그 -->
+        <div class="settings-pane" id="pane-log">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <div class="card-label" style="margin-bottom:0;">📋 활동 로그</div>
+              <button onclick="loadActivityLog()" style="width:auto;padding:4px 14px;font-size:.76rem;">새로고침</button>
+            </div>
+            <p style="font-size:.78rem;color:var(--text-dim);margin:0 0 10px">서버 재시작 시 초기화됩니다. 최근 500건까지 표시.</p>
+            <div class="log-wrap">
+              <table class="log-table">
+                <thead><tr><th>시각</th><th>사번 (이름)</th><th>탭</th><th>활동</th><th>상세</th></tr></thead>
+                <tbody id="activity-log-tbody"><tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">로그를 불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
-
-    <!-- ② 내 비밀번호 변경 -->
-    <div class="card">
-      <div class="card-label">🔒 내 비밀번호 변경</div>
-      <div class="pw-change-form">
-        <input id="pw-current" type="password" placeholder="현재 비밀번호" />
-        <input id="pw-new"     type="password" placeholder="새 비밀번호 (6자 이상)" />
-        <input id="pw-new2"    type="password" placeholder="새 비밀번호 확인" />
-        <button onclick="changeMyPassword()">변경</button>
-        <div id="pw-change-msg" class="pw-change-msg"></div>
-      </div>
-    </div>
-
-    <!-- ③ 활동 로그 (마스터 전용) -->
-    <div class="card master-only">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div class="card-label" style="margin-bottom:0;">📋 활동 로그</div>
-        <button onclick="loadActivityLog()" style="width:auto;padding:4px 14px;font-size:.76rem;background:#5577aa;border-radius:6px;">새로고침</button>
-      </div>
-      <p style="font-size:.78rem;color:#888;margin:0 0 10px">서버 재시작 시 초기화됩니다. 최근 500건까지 표시.</p>
-      <div class="log-wrap">
-        <table class="log-table">
-          <thead><tr><th>시각</th><th>사번 (이름)</th><th>탭</th><th>활동</th><th>상세</th></tr></thead>
-          <tbody id="activity-log-tbody"><tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">로그를 불러오는 중…</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-
   </div><!-- /panel-settings -->
 
 </main>
 
-<!-- ── 모달 ── -->
-<div id="modal-overlay">
-  <div id="modal">
-    <!-- 로그인 모드 -->
-    <div id="modal-login-section">
-      <h2>🔑 관리자 로그인</h2>
-      <p>사번과 비밀번호를 입력하면 자료 업로드 기능을 사용할 수 있습니다.</p>
-      <input id="modal-id" type="text" placeholder="사번 입력"
-             onkeydown="if(event.key==='Enter') document.getElementById('modal-pw').focus()" />
-      <input id="modal-pw" type="password" placeholder="비밀번호 입력"
-             onkeydown="if(event.key==='Enter') confirmAdmin()" />
-      <div id="modal-err"></div>
-      <div class="modal-btns">
-        <button id="modal-cancel" onclick="closeAdminModal()">취소</button>
-        <button id="modal-confirm" onclick="confirmAdmin()">로그인</button>
-      </div>
-      <div style="text-align:center;margin-top:6px;">
-        <button class="modal-link-btn" onclick="showResetMode()">비밀번호를 잊으셨나요?</button>
-      </div>
-    </div>
-    <!-- 초기화 요청 모드 -->
-    <div id="modal-reset-section">
-      <h2>🔓 비밀번호 초기화 요청</h2>
-      <p>사번을 입력하면 마스터 관리자에게 초기화 요청이 전달됩니다.</p>
-      <input id="modal-reset-id" type="text" placeholder="사번 입력"
-             onkeydown="if(event.key==='Enter') submitResetRequest()" />
-      <div id="modal-reset-msg" style="font-size:.78rem;min-height:1em;"></div>
-      <div class="modal-btns">
-        <button onclick="showLoginMode()" style="background:#eee;color:#444;">돌아가기</button>
-        <button onclick="submitResetRequest()">요청 전송</button>
-      </div>
+</div><!-- /app-shell -->
+
+<!-- ── 비밀번호 변경 모달 ── -->
+<div id="pwmodal-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <h2>🔒 비밀번호 변경</h2>
+    <input id="pwm-current" type="password" placeholder="현재 비밀번호" />
+    <input id="pwm-new"     type="password" placeholder="새 비밀번호 (6자 이상)" />
+    <input id="pwm-new2"    type="password" placeholder="새 비밀번호 확인"
+           onkeydown="if(event.key==='Enter') submitPwModal()" />
+    <div id="pwm-err" class="pw-change-msg"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closePwModal()">취소</button>
+      <button onclick="submitPwModal()">변경</button>
     </div>
   </div>
 </div>
@@ -511,16 +607,25 @@
   const BE = "http://127.0.0.1:8000";
 
   // ── 상태 ─────────────────────────────────────────────────────────────
-  let adminRole  = "";       // "" | "admin" | "master"
+  let adminRole  = "";       // "" | "user" | "admin" | "master"
   let adminToken = "";
   let adminId    = "";
+  let adminName  = "";
   let bareMode   = false;
   let activeTab  = "failure";
+  let _pending   = null;     // 로그인 응답 임시 저장 (강제 비밀번호 변경용)
 
   const dot        = document.getElementById("dot");
   const statusText = document.getElementById("status-text");
   const sendBtn    = document.getElementById("send-btn");
   const answerBox  = document.getElementById("answer-box");
+
+  function roleLabel(r) { return r === "master" ? "마스터" : r === "admin" ? "관리자" : "사용자"; }
+  function roleIcon(r)  { return r === "master" ? "🔑" : r === "admin" ? "🛠️" : "👤"; }
+
+  function _escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  }
 
   // ── 헬스 체크 ────────────────────────────────────────────────────────
   async function checkHealth() {
@@ -532,8 +637,204 @@
       dot.className = "err"; statusText.textContent = "백엔드 연결 실패";
     }
   }
-  checkHealth();
-  loadDeviceList();
+
+  // ══════════════════════════ 로그인 게이트 ══════════════════════════
+  function showLoginSection() {
+    document.getElementById("gate-login").hidden  = false;
+    document.getElementById("gate-reset").hidden  = true;
+    document.getElementById("gate-access").hidden = true;
+    document.getElementById("gate-err").textContent = "";
+  }
+  function showResetSection() {
+    document.getElementById("gate-login").hidden  = true;
+    document.getElementById("gate-reset").hidden  = false;
+    document.getElementById("gate-access").hidden = true;
+    document.getElementById("reset-id").value = "";
+    document.getElementById("reset-msg").textContent = "";
+    setTimeout(() => document.getElementById("reset-id").focus(), 80);
+  }
+  function showAccessSection() {
+    document.getElementById("gate-login").hidden  = true;
+    document.getElementById("gate-reset").hidden  = true;
+    document.getElementById("gate-access").hidden = false;
+    document.getElementById("access-id").value = "";
+    document.getElementById("access-name").value = "";
+    document.getElementById("access-dept").value = "";
+    document.getElementById("access-msg").textContent = "";
+    setTimeout(() => document.getElementById("access-id").focus(), 80);
+  }
+
+  async function doLogin() {
+    const id = document.getElementById("login-id").value.trim();
+    const pw = document.getElementById("login-pw").value;
+    const err = document.getElementById("gate-err");
+    if (!id || !pw) { err.textContent = "사번과 비밀번호를 모두 입력해 주세요."; return; }
+    err.textContent = "확인 중…";
+    try {
+      const res = await fetch(`${BE}/api/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_id: id, password: pw }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        err.textContent = data.error || "로그인 실패";
+        document.getElementById("login-pw").value = "";
+        return;
+      }
+      err.textContent = "";
+      data.password_used = pw;
+      _pending = data;
+      if (data.must_change_password) {
+        document.getElementById("login-gate").hidden = true;
+        document.getElementById("pw-force-gate").hidden = false;
+        document.getElementById("force-pw-new").value = "";
+        document.getElementById("force-pw-new2").value = "";
+        document.getElementById("force-pw-err").textContent = "";
+      } else {
+        enterApp(data);
+      }
+    } catch {
+      err.textContent = "서버 연결 오류. 잠시 후 다시 시도해 주세요.";
+    }
+  }
+
+  async function submitForcePw() {
+    const nw  = document.getElementById("force-pw-new").value;
+    const nw2 = document.getElementById("force-pw-new2").value;
+    const err = document.getElementById("force-pw-err");
+    if (nw.length < 6)  { err.textContent = "새 비밀번호는 6자 이상이어야 합니다."; return; }
+    if (nw !== nw2)      { err.textContent = "새 비밀번호가 일치하지 않습니다."; return; }
+    err.textContent = "변경 중…";
+    try {
+      const res = await fetch(`${BE}/api/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": _pending.token },
+        body: JSON.stringify({ current_password: _pending.password_used, new_password: nw }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        document.getElementById("pw-force-gate").hidden = true;
+        enterApp(_pending);
+      } else {
+        err.textContent = data.error || "변경 실패";
+      }
+    } catch {
+      err.textContent = "서버 오류. 잠시 후 다시 시도해 주세요.";
+    }
+  }
+
+  async function submitResetRequest() {
+    const id  = document.getElementById("reset-id").value.trim();
+    const msg = document.getElementById("reset-msg");
+    if (!id) { msg.style.color = "var(--danger)"; msg.textContent = "사번을 입력해 주세요."; return; }
+    msg.style.color = "var(--text-dim)"; msg.textContent = "요청 중…";
+    try {
+      const res  = await fetch(`${BE}/api/request-reset`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_id: id }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        msg.style.color = "var(--success)"; msg.textContent = `✅ ${data.message}`;
+        document.getElementById("reset-id").value = "";
+      } else {
+        msg.style.color = "var(--danger)"; msg.textContent = data.error || "요청 실패";
+      }
+    } catch { msg.style.color = "var(--danger)"; msg.textContent = "서버 오류"; }
+  }
+
+  async function submitAccessRequest() {
+    const id   = document.getElementById("access-id").value.trim();
+    const name = document.getElementById("access-name").value.trim();
+    const dept = document.getElementById("access-dept").value.trim();
+    const msg  = document.getElementById("access-msg");
+    if (!id || !name) { msg.style.color = "var(--danger)"; msg.textContent = "사번과 이름을 입력해 주세요."; return; }
+    msg.style.color = "var(--text-dim)"; msg.textContent = "요청 중…";
+    try {
+      const res  = await fetch(`${BE}/api/access-request`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emp_id: id, name, dept }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        msg.style.color = "var(--success)"; msg.textContent = `✅ ${data.message}`;
+        document.getElementById("access-id").value = "";
+        document.getElementById("access-name").value = "";
+        document.getElementById("access-dept").value = "";
+      } else {
+        msg.style.color = "var(--danger)"; msg.textContent = data.error || "요청 실패";
+      }
+    } catch { msg.style.color = "var(--danger)"; msg.textContent = "서버 오류"; }
+  }
+
+  function enterApp(data) {
+    adminRole  = data.role;
+    adminToken = data.token;
+    adminId    = data.admin_id;
+    adminName  = data.name || "";
+    document.getElementById("login-gate").hidden = true;
+    document.getElementById("pw-force-gate").hidden = true;
+    document.getElementById("app-shell").hidden = false;
+    document.body.classList.remove("role-user", "role-admin", "role-master");
+    document.body.classList.add("role-" + adminRole);
+    document.getElementById("user-badge").textContent =
+      `${roleIcon(adminRole)} ${roleLabel(adminRole)} (${adminName || adminId})`;
+    bareMode = false;
+    document.getElementById("btn-vibe").classList.remove("t-active");
+    document.getElementById("btn-harn").classList.add("t-active");
+    document.getElementById("mode-desc").textContent = "검색 + 출처 표시";
+    activeTab = "failure";
+    switchTab("failure");
+    checkHealth();
+    loadDeviceList();
+    if (adminRole === "master") { loadResetRequests(); loadDocDeleteRequests(); loadAccessRequests(); }
+  }
+
+  async function doLogout() {
+    try { await fetch(`${BE}/api/logout`, { method: "POST", headers: { "X-Admin-Token": adminToken } }); } catch {}
+    adminRole = ""; adminToken = ""; adminId = ""; adminName = ""; _pending = null;
+    document.body.classList.remove("role-user", "role-admin", "role-master");
+    document.getElementById("app-shell").hidden = true;
+    document.getElementById("pw-force-gate").hidden = true;
+    document.getElementById("login-gate").hidden = false;
+    document.getElementById("login-id").value = "";
+    document.getElementById("login-pw").value = "";
+    showLoginSection();
+  }
+
+  // ── 비밀번호 변경 모달 (전체 역할 공용) ────────────────────────────
+  function openPwModal() {
+    document.getElementById("pwm-current").value = "";
+    document.getElementById("pwm-new").value = "";
+    document.getElementById("pwm-new2").value = "";
+    document.getElementById("pwm-err").textContent = "";
+    document.getElementById("pwmodal-overlay").classList.add("open");
+  }
+  function closePwModal() { document.getElementById("pwmodal-overlay").classList.remove("open"); }
+  async function submitPwModal() {
+    const cur = document.getElementById("pwm-current").value;
+    const nw  = document.getElementById("pwm-new").value;
+    const nw2 = document.getElementById("pwm-new2").value;
+    const msg = document.getElementById("pwm-err");
+    if (!cur || !nw || !nw2) { msg.style.color = "var(--danger)"; msg.textContent = "모든 항목을 입력해 주세요."; return; }
+    if (nw !== nw2)           { msg.style.color = "var(--danger)"; msg.textContent = "새 비밀번호가 일치하지 않습니다."; return; }
+    msg.style.color = "var(--text-dim)"; msg.textContent = "변경 중…";
+    try {
+      const res  = await fetch(`${BE}/api/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
+        body: JSON.stringify({ current_password: cur, new_password: nw }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        msg.style.color = "var(--success)"; msg.textContent = "✅ 비밀번호가 변경되었습니다.";
+        setTimeout(closePwModal, 900);
+      } else { msg.style.color = "var(--danger)"; msg.textContent = data.error || "변경 실패"; }
+    } catch { msg.style.color = "var(--danger)"; msg.textContent = "서버 오류"; }
+  }
+  document.getElementById("pwmodal-overlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("pwmodal-overlay")) closePwModal();
+  });
 
   // ── 장비 드롭다운 ────────────────────────────────────────────────────
   let _deviceList = [];   // [{device_name, model_name}, ...]
@@ -568,19 +869,23 @@
       return `
         <div class="docs-device-group">
           <div class="docs-device-header" onclick="toggleDocsGroup('${bodyId}', this)">
-            <span>📁 ${dn}</span>
+            <span>📁 ${_escapeHtml(dn)}</span>
             <span class="docs-device-caret">▼</span>
           </div>
           <div class="docs-device-body" id="${bodyId}">
             ${models.map(m => `
               <div class="docs-model-row">
                 <div class="docs-model-name">
-                  <span>└ ${m.model_name || "(공통)"}</span>
-                  <span class="docs-chunk-badge">${m.chunk_count ?? 0}개 조각</span>
+                  <span>└ ${_escapeHtml(m.model_name || "(공통)")}</span>
+                  <span class="docs-chunk-badge">${m.chunk_count ?? 0}개 항목</span>
                 </div>
-                <button class="docs-del-btn${adminRole !== 'master' ? ' req-btn' : ''}"
-                  onclick="deleteDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">
-                  ${adminRole !== 'master' ? '삭제 요청' : '삭제'}</button>
+                <div class="docs-model-actions">
+                  <button class="docs-dl-btn"
+                    onclick="downloadDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">다운로드</button>
+                  <button class="docs-del-btn${adminRole !== 'master' ? ' req-btn' : ''}"
+                    onclick="deleteDoc('${dn.replace(/'/g,"\\'")}','${(m.model_name||'').replace(/'/g,"\\'")}')">
+                    ${adminRole !== 'master' ? '삭제 요청' : '삭제'}</button>
+                </div>
               </div>`).join("")}
           </div>
         </div>`;
@@ -594,6 +899,25 @@
     const collapsed = body.classList.toggle('collapsed');
     if (caret) caret.style.transform = collapsed ? 'rotate(-90deg)' : '';
   }
+
+  async function downloadDoc(deviceName, modelName) {
+    try {
+      const params = new URLSearchParams({ device_name: deviceName, model_name: modelName });
+      const res = await fetch(`${BE}/api/download-docs?${params}`, {
+        headers: { "X-Admin-Token": adminToken },
+      });
+      if (!res.ok) { alert("다운로드에 실패했습니다."); return; }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${deviceName}_${modelName || "공통"}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch { alert("네트워크 오류로 다운로드하지 못했습니다."); }
+  }
+
+  function downloadTemplate() { location.href = `${BE}/api/download-template`; }
 
   async function deleteDoc(deviceName, modelName) {
     if (adminRole === "master") {
@@ -691,116 +1015,24 @@
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("panel-active"));
     document.getElementById("tab-"    + tab).classList.add("tab-active");
     document.getElementById("panel-" + tab).classList.add("panel-active");
-    if (tab === "settings" && adminRole === "master") { loadUserList(); loadResetRequests(); loadDocDeleteRequests(); loadUnansweredQuestions(); loadActivityLog(); }
-  }
-
-  // ── 관리자 권한 ──────────────────────────────────────────────────────
-  function applyRoleMode(role, token, id) {
-    adminRole  = role;
-    adminToken = token;
-    adminId    = id;
-    const isAdmin = !!role;
-    document.body.classList.remove("role-admin", "role-master");
-    if (role) document.body.classList.add("role-" + role);
-    document.getElementById("admin-badge").classList.toggle("visible", isAdmin);
-    const badge = document.getElementById("admin-badge");
-    badge.textContent = role === "master" ? `🔑 마스터 (${id})` : `🔑 관리자 (${id})`;
-    document.getElementById("btn-admin-login").textContent = isAdmin ? "로그아웃" : "관리자 로그인";
-    document.getElementById("btn-admin-login").onclick     = isAdmin ? doLogout : openAdminModal;
-    renderDocsList();   // 삭제/삭제 요청 버튼 라벨이 role에 따라 바뀌므로 재렌더
-    if (!isAdmin) {
-      bareMode = false;
-      document.getElementById("btn-harn").classList.add("t-active");
-      document.getElementById("btn-vibe").classList.remove("t-active");
-      document.getElementById("mode-desc").textContent = "검색 + 출처 표시";
-      if (activeTab !== "failure") switchTab("failure");
-      _pendingResetCount = 0; _pendingDocDeleteCount = 0; _refreshBadge();
-    } else if (role === "master") {
-      loadResetRequests();        // 로그인 직후 배지 반영
-      loadDocDeleteRequests();
+    if (tab === "settings" && adminRole === "master") {
+      loadUserList(); loadResetRequests(); loadDocDeleteRequests(); loadUnansweredQuestions(); loadAccessRequests(); loadActivityLog();
     }
   }
-  async function doLogout() {
-    if (window.AuthWidget?.logout) await window.AuthWidget.logout().catch(() => {});
-    applyRoleMode("", "", "");
-  }
 
-  // ── 외부 인증 위젯 연동 ──────────────────────────────────────────────
-  async function initAuth() {
-    try {
-      const res  = await fetch(BE + "/api/me");
-      const data = await res.json();
-      if (data.authenticated && data.role) {
-        applyRoleMode(data.role, "", data.username || data.name || "");
-      }
-    } catch {}
-  }
-  // 위젯 로그인 이벤트 감지 (위젯이 발생시키는 이벤트명에 따라 자동 작동)
-  ["auth:ready", "auth:login", "authChanged", "authSuccess"].forEach(ev =>
-    window.addEventListener(ev, initAuth)
-  );
-  // 위젯 초기화 대기 후 1회 확인
-  setTimeout(initAuth, 600);
-
-  // ── 모달 ─────────────────────────────────────────────────────────────
-  function openAdminModal() {
-    document.getElementById("modal-id").value = "";
-    document.getElementById("modal-pw").value = "";
-    document.getElementById("modal-err").textContent = "";
-    document.getElementById("modal-overlay").classList.add("open");
-    setTimeout(() => document.getElementById("modal-id").focus(), 80);
-  }
-  function closeAdminModal() { document.getElementById("modal-overlay").classList.remove("open"); }
-  async function confirmAdmin() {
-    const id = document.getElementById("modal-id").value.trim();
-    const pw = document.getElementById("modal-pw").value;
-    if (!id || !pw) {
-      document.getElementById("modal-err").textContent = "사번과 비밀번호를 모두 입력해 주세요.";
-      return;
-    }
-    document.getElementById("modal-confirm").disabled = true;
-    document.getElementById("modal-err").textContent = "확인 중…";
-    try {
-      const res  = await fetch(`${BE}/api/admin/login`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ admin_id: id, password: pw }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        closeAdminModal();
-        applyRoleMode(data.role, data.token, data.admin_id);
-      } else {
-        document.getElementById("modal-err").textContent = data.error || "로그인 실패";
-        document.getElementById("modal-pw").value = "";
-        document.getElementById("modal-pw").focus();
-      }
-    } catch {
-      document.getElementById("modal-err").textContent = "서버 연결 오류. 잠시 후 다시 시도해 주세요.";
-    } finally {
-      document.getElementById("modal-confirm").disabled = false;
-    }
-  }
-  document.getElementById("modal-overlay").addEventListener("click", e => {
-    if (e.target === document.getElementById("modal-overlay")) closeAdminModal();
-  });
-
-  // ── 유틸 ─────────────────────────────────────────────────────────────
-  function _escapeHtml(s) {
-    return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-  }
-  function setQ(text) { document.getElementById("question").value = text; document.getElementById("question").focus(); }
-  function clearAnswer() {
-    answerBox.textContent = "답변이 여기에 표시됩니다.";
-    answerBox.className = "empty";
-    document.getElementById("sources-box").style.display = "none";
-    document.getElementById("sources-box").innerHTML = "";
-  }
   function setMode(vibe) {
     if (adminRole !== "master") return;
     bareMode = vibe;
     document.getElementById("btn-vibe").classList.toggle("t-active",  vibe);
     document.getElementById("btn-harn").classList.toggle("t-active", !vibe);
     document.getElementById("mode-desc").textContent = vibe ? "모델 직접 호출 (출처 없음)" : "검색 + 출처 표시";
+  }
+
+  function clearAnswer() {
+    answerBox.textContent = "답변이 여기에 표시됩니다.";
+    answerBox.className = "empty";
+    document.getElementById("sources-box").style.display = "none";
+    document.getElementById("sources-box").innerHTML = "";
   }
 
   // ── 질문 전송 ────────────────────────────────────────────────────────
@@ -822,7 +1054,7 @@
     try {
       const res = await fetch(BE + "/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
         body: JSON.stringify({ question, context: "", bare: useBare, device_name, model_name }),
       });
       if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
@@ -843,7 +1075,7 @@
             const parsed = JSON.parse(raw);
             if (parsed.sources) {
               const chips = parsed.sources.map(s =>
-                `<span class="src-chip">${s.title}${s.page ? ' <em>(' + s.page + ')</em>' : ''}</span>`
+                `<span class="src-chip">${_escapeHtml(s.title)}${s.page ? ' <em>(' + _escapeHtml(s.page) + ')</em>' : ''}</span>`
               ).join(" ");
               sourcesBox.innerHTML = `<strong>📎 근거</strong>&nbsp; ${chips}`;
               sourcesBox.style.display = "block";
@@ -868,7 +1100,7 @@
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendQuestion();
   });
 
-  // ── PDF 업로드 ───────────────────────────────────────────────────────
+  // ── 엑셀 업로드 ──────────────────────────────────────────────────────
   let selectedFile = null;
 
   function onFileSelected(input) {
@@ -893,7 +1125,7 @@
     document.getElementById("drop-zone").classList.remove("dragover");
     const file = e.dataTransfer.files[0];
     if (!file) return;
-    const inp = document.getElementById("pdf-input");
+    const inp = document.getElementById("xlsx-input");
     const dt = new DataTransfer(); dt.items.add(file); inp.files = dt.files;
     onFileSelected(inp);
   }
@@ -902,11 +1134,11 @@
     el.className = type; el.textContent = msg;
   }
 
-  async function uploadPDF() {
+  async function uploadDocs() {
     if (!selectedFile) return;
     const btn = document.getElementById("upload-btn");
     btn.disabled = true;
-    setUploadStatus("info", "⏳ 업로드 중… PDF 파싱 및 OCR(필요 시)에 시간이 걸릴 수 있습니다.");
+    setUploadStatus("info", "⏳ 업로드 중…");
     document.getElementById("upload-preview").style.display = "none";
 
     const formData = new FormData();
@@ -915,21 +1147,20 @@
     formData.append("model_name",  document.getElementById("up-model-name").value.trim());
 
     try {
-      const res  = await fetch(BE + "/api/upload-pdf", {
+      const res  = await fetch(BE + "/api/upload-docs", {
         method: "POST", body: formData,
         headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
       if (data.ok) {
-        const ocrNote  = data.ocr_used ? " (OCR 사용)" : "";
-        const devNote  = [data.device_name, data.model_name].filter(Boolean).join(" / ");
+        const devNote = [data.device_name, data.model_name].filter(Boolean).join(" / ");
         setUploadStatus("ok",
-          `✅ 완료${ocrNote}${devNote ? " — " + devNote : ""} · ${data.pages_processed}페이지 / ${data.chunks_extracted}개 조각 추출 · 검색에 즉시 반영됩니다.`
+          `✅ 완료${devNote ? " — " + devNote : ""} · ${data.rows_extracted}개 항목 업로드 · 검색에 즉시 반영됩니다.`
         );
         await loadDeviceList();   // 고장 대응 드롭다운 갱신
         const contentEl = document.getElementById("preview-content");
-        contentEl.innerHTML = (data.preview ?? []).map(chunk =>
-          `<div class="preview-chunk">${chunk.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>`
+        contentEl.innerHTML = (data.preview ?? []).map(row =>
+          `<div class="preview-chunk">${_escapeHtml(row)}</div>`
         ).join("");
         document.getElementById("upload-preview").style.display = "block";
       } else {
@@ -942,31 +1173,7 @@
     }
   }
 
-  async function resetDocs() {
-    setUploadStatus("info", "초기화 중…");
-    const formData = new FormData();
-    formData.append("device_name", document.getElementById("up-device-name").value.trim());
-    formData.append("model_name",  document.getElementById("up-model-name").value.trim());
-    try {
-      const res  = await fetch(BE + "/api/reset-docs", {
-        method: "POST", body: formData,
-        headers: { "X-Admin-Token": adminToken },
-      });
-      const data = await res.json();
-      setUploadStatus("ok", `✅ ${data.message}`);
-      document.getElementById("upload-preview").style.display = "none";
-      await loadDeviceList();   // 고장 대응 드롭다운 갱신
-      selectedFile = null;
-      document.getElementById("selected-file").style.display = "none";
-      document.getElementById("pdf-input").value = "";
-      document.getElementById("upload-btn").disabled = true;
-    } catch (err) {
-      setUploadStatus("err", `❌ ${err.message}`);
-    }
-  }
-
-
-  // ── 사용자 관리 ──────────────────────────────────────────────────────
+  // ── 사용자 현황 (마스터) ────────────────────────────────────────────
   async function loadUserList() {
     const tbody = document.getElementById("admin-user-tbody");
     if (!tbody) return;
@@ -975,27 +1182,51 @@
         headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
-      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">${data.detail || "오류"}</td></tr>`; return; }
+      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger)">${data.detail || "오류"}</td></tr>`; return; }
       tbody.innerHTML = data.users.map(u => `
         <tr>
-          <td>${u.admin_id}</td>
-          <td>${u.name || "—"}</td>
-          <td><span class="role-badge ${u.role}">${u.role === "master" ? "마스터" : "관리자"}</span></td>
-          <td>${u.role === "master" ? "—" : `<button class="reset-btn-do" onclick="resetAdminPassword('${u.admin_id}')">초기화</button>`}</td>
+          <td>${_escapeHtml(u.admin_id)}</td>
+          <td>${_escapeHtml(u.name || "—")}</td>
+          <td>${_escapeHtml(u.dept || "—")}</td>
+          <td>${_roleCell(u)}</td>
+          <td>${u.role === "master" ? "—" : `<button class="req-btn-do" onclick="resetAdminPassword('${u.admin_id}')">초기화</button>`}</td>
           <td>${u.role === "master" ? "—" : `<button class="admin-del-btn" onclick="removeAdmin('${u.admin_id}')">삭제</button>`}</td>
         </tr>`).join("");
     } catch {
-      tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">불러오기 실패</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger)">불러오기 실패</td></tr>`;
     }
+  }
+
+  function _roleCell(u) {
+    if (u.admin_id === adminId) {
+      return `<span class="role-badge ${u.role}">${roleLabel(u.role)}</span>`;
+    }
+    const opts = ["user", "admin", "master"].map(r =>
+      `<option value="${r}" ${r === u.role ? "selected" : ""}>${roleLabel(r)}</option>`).join("");
+    return `<select class="role-select" onchange="changeUserRole('${u.admin_id}', this.value)">${opts}</select>`;
+  }
+
+  async function changeUserRole(targetId, role) {
+    if (!confirm(`사번 ${targetId}의 권한을 '${roleLabel(role)}'(으)로 변경할까요?`)) { await loadUserList(); return; }
+    try {
+      const res  = await fetch(`${BE}/api/admin/users/${encodeURIComponent(targetId)}/role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
+        body: JSON.stringify({ role }),
+      });
+      const data = await res.json();
+      if (!data.ok) alert(data.error || "변경 실패");
+    } catch { alert("서버 오류"); }
+    await loadUserList();
   }
 
   async function addAdmin() {
     const id   = document.getElementById("new-admin-id").value.trim();
     const name = document.getElementById("new-admin-name").value.trim();
     const msg  = document.getElementById("add-admin-msg");
-    if (!id)   { msg.style.color = "#c00"; msg.textContent = "사번을 입력해 주세요."; return; }
-    if (!name) { msg.style.color = "#c00"; msg.textContent = "이름을 입력해 주세요."; return; }
-    msg.style.color = "#555"; msg.textContent = "등록 중…";
+    if (!id)   { msg.style.color = "var(--danger)"; msg.textContent = "사번을 입력해 주세요."; return; }
+    if (!name) { msg.style.color = "var(--danger)"; msg.textContent = "이름을 입력해 주세요."; return; }
+    msg.style.color = "var(--text-dim)"; msg.textContent = "등록 중…";
     try {
       const res  = await fetch(`${BE}/api/admin/users/add`, {
         method: "POST",
@@ -1004,57 +1235,39 @@
       });
       const data = await res.json();
       if (data.ok) {
-        msg.style.color = "#0a7a0a";
+        msg.style.color = "var(--success)";
         msg.textContent = `✅ ${name} (${id}) 등록 완료 — 초기 비밀번호: admin1234`;
         document.getElementById("new-admin-id").value   = "";
         document.getElementById("new-admin-name").value = "";
         await loadUserList();
       } else {
-        msg.style.color = "#c00"; msg.textContent = data.error || "등록 실패";
+        msg.style.color = "var(--danger)"; msg.textContent = data.error || "등록 실패";
       }
-    } catch { msg.style.color = "#c00"; msg.textContent = "서버 오류"; }
+    } catch { msg.style.color = "var(--danger)"; msg.textContent = "서버 오류"; }
   }
 
-  // ── 모달: 로그인 ↔ 초기화 요청 전환 ────────────────────────────────
-  function showResetMode() {
-    document.getElementById("modal-login-section").classList.add("hidden");
-    document.getElementById("modal-reset-section").classList.add("visible");
-    document.getElementById("modal-reset-id").value = "";
-    document.getElementById("modal-reset-msg").textContent = "";
-    setTimeout(() => document.getElementById("modal-reset-id").focus(), 80);
-  }
-  function showLoginMode() {
-    document.getElementById("modal-reset-section").classList.remove("visible");
-    document.getElementById("modal-login-section").classList.remove("hidden");
-    setTimeout(() => document.getElementById("modal-id").focus(), 80);
-  }
-
-  async function submitResetRequest() {
-    const id  = document.getElementById("modal-reset-id").value.trim();
-    const msg = document.getElementById("modal-reset-msg");
-    if (!id) { msg.style.color = "#c00"; msg.textContent = "사번을 입력해 주세요."; return; }
-    msg.style.color = "#555"; msg.textContent = "요청 중…";
+  async function removeAdmin(targetId) {
+    if (!confirm(`사번 ${targetId} 계정을 삭제할까요?`)) return;
     try {
-      const res  = await fetch(`${BE}/api/admin/request-reset`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ admin_id: id }),
+      const res  = await fetch(`${BE}/api/admin/users/${encodeURIComponent(targetId)}`, {
+        method: "DELETE", headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
-      if (data.ok) {
-        msg.style.color = "#0a7a0a";
-        msg.textContent = `✅ ${data.message}`;
-        document.getElementById("modal-reset-id").value = "";
-      } else {
-        msg.style.color = "#c00";
-        msg.textContent = data.error || "요청 실패";
-      }
-    } catch { msg.style.color = "#c00"; msg.textContent = "서버 오류"; }
+      if (data.ok) { await loadUserList(); }
+      else alert(data.error || "삭제 실패");
+    } catch { alert("서버 오류"); }
   }
 
-  // ── 설정 탭 배지 (비밀번호 초기화 + 매뉴얼 삭제 요청 합산) ─────────
-  let _pendingResetCount = 0;
-  let _pendingDocDeleteCount = 0;
+  // ── 설정 서브메뉴 ────────────────────────────────────────────────────
+  function switchSettingsPane(name) {
+    document.querySelectorAll(".settings-menu-item").forEach(b => b.classList.toggle("active", b.dataset.pane === name));
+    document.querySelectorAll(".settings-pane").forEach(p => p.classList.toggle("active", p.id === "pane-" + name));
+    const loaders = {
+      access: loadAccessRequests, resetreq: loadResetRequests, docdel: loadDocDeleteRequests,
+      unanswered: loadUnansweredQuestions, users: loadUserList, log: loadActivityLog,
+    };
+    if (loaders[name]) loaders[name]();
+  }
 
   function _updateSettingsTabBadge(count) {
     const btn = document.getElementById("tab-settings");
@@ -1068,9 +1281,59 @@
       btn.appendChild(badge);
     }
   }
-
+  let _pendingResetCount = 0, _pendingDocDeleteCount = 0, _pendingAccessCount = 0;
   function _refreshBadge() {
-    _updateSettingsTabBadge(_pendingResetCount + _pendingDocDeleteCount);
+    _updateSettingsTabBadge(_pendingResetCount + _pendingDocDeleteCount + _pendingAccessCount);
+  }
+
+  // ── 사용 권한 요청 목록 (마스터) ─────────────────────────────────────
+  async function loadAccessRequests() {
+    const wrap = document.getElementById("access-requests-list");
+    if (!wrap) return;
+    try {
+      const res  = await fetch(`${BE}/api/admin/access-requests`, {
+        headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (!data.ok) { wrap.innerHTML = `<div class="no-req" style="color:var(--danger)">불러오기 실패</div>`; return; }
+      _pendingAccessCount = data.requests.length;
+      _refreshBadge();
+      if (!data.requests.length) { wrap.innerHTML = `<div class="no-req">요청 없음</div>`; return; }
+      wrap.innerHTML = data.requests.map(r => `
+        <div class="req-row">
+          <div class="req-info">
+            <strong>${_escapeHtml(r.name)}</strong> (${_escapeHtml(r.emp_id)})
+            ${r.dept ? ` · ${_escapeHtml(r.dept)}` : ""}
+            <span style="color:#888;font-size:.74rem;margin-left:8px;">${_escapeHtml(r.requested_at)}</span>
+          </div>
+          <div class="req-actions">
+            <button class="req-btn-do"   onclick="approveAccessRequest('${r.id}')">승인</button>
+            <button class="req-btn-skip" onclick="dismissAccessRequest('${r.id}')">거절</button>
+          </div>
+        </div>`).join("");
+    } catch { wrap.innerHTML = `<div class="no-req" style="color:var(--danger)">서버 오류</div>`; }
+  }
+
+  async function approveAccessRequest(id) {
+    try {
+      const res  = await fetch(`${BE}/api/admin/access-requests/${encodeURIComponent(id)}/approve`, {
+        method: "POST", headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (data.ok) { alert(`✅ ${data.message}`); await loadAccessRequests(); }
+      else alert(data.error || "승인 실패");
+    } catch { alert("서버 오류"); }
+  }
+
+  async function dismissAccessRequest(id) {
+    try {
+      const res  = await fetch(`${BE}/api/admin/access-requests/${encodeURIComponent(id)}`, {
+        method: "DELETE", headers: { "X-Admin-Token": adminToken },
+      });
+      const data = await res.json();
+      if (data.ok) await loadAccessRequests();
+      else alert(data.error || "오류");
+    } catch { alert("서버 오류"); }
   }
 
   // ── 비밀번호 초기화 요청 목록 (마스터) ──────────────────────────────
@@ -1082,35 +1345,33 @@
         headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
-      if (!data.ok) { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">불러오기 실패</div>`; return; }
+      if (!data.ok) { wrap.innerHTML = `<div class="no-req" style="color:var(--danger)">불러오기 실패</div>`; return; }
       _pendingResetCount = data.requests.length;
       _refreshBadge();
-      if (!data.requests.length) {
-        wrap.innerHTML = `<div class="no-reset-req">요청 없음</div>`;
-        return;
-      }
+      if (!data.requests.length) { wrap.innerHTML = `<div class="no-req">요청 없음</div>`; return; }
       wrap.innerHTML = data.requests.map(r => `
-        <div class="reset-req-row">
-          <div class="reset-req-info">
-            <strong>${r.admin_id}</strong>${r.name ? ` (${r.name})` : ""}
-            <span style="color:#888;font-size:.74rem;margin-left:8px;">${r.requested_at}</span>
+        <div class="req-row">
+          <div class="req-info">
+            <strong>${_escapeHtml(r.admin_id)}</strong>${r.name ? ` (${_escapeHtml(r.name)})` : ""}
+            <span style="color:#888;font-size:.74rem;margin-left:8px;">${_escapeHtml(r.requested_at)}</span>
           </div>
-          <div class="reset-req-actions">
-            <button class="reset-btn-do"   onclick="resetAdminPassword('${r.admin_id}')">초기화</button>
-            <button class="reset-btn-skip" onclick="dismissResetRequest('${r.admin_id}')">무시</button>
+          <div class="req-actions">
+            <button class="req-btn-do"   onclick="resetAdminPassword('${r.admin_id}')">초기화</button>
+            <button class="req-btn-skip" onclick="dismissResetRequest('${r.admin_id}')">무시</button>
           </div>
         </div>`).join("");
-    } catch { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">서버 오류</div>`; }
+    } catch { wrap.innerHTML = `<div class="no-req" style="color:var(--danger)">서버 오류</div>`; }
   }
 
   async function resetAdminPassword(targetId) {
-    if (!confirm(`사번 ${targetId}의 비밀번호를 admin1234로 초기화할까요?`)) return;
+    if (!confirm(`사번 ${targetId}의 비밀번호를 초기화할까요?`)) return;
     try {
       const res  = await fetch(`${BE}/api/admin/reset-password/${encodeURIComponent(targetId)}`, {
         method: "POST", headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
       if (data.ok) {
+        alert(`✅ ${data.message}`);
         await loadResetRequests();
         await loadUserList();
       } else { alert(data.error || "초기화 실패"); }
@@ -1137,26 +1398,23 @@
         headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
-      if (!data.ok) { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">불러오기 실패</div>`; return; }
+      if (!data.ok) { wrap.innerHTML = `<div class="no-req" style="color:var(--danger)">불러오기 실패</div>`; return; }
       _pendingDocDeleteCount = data.requests.length;
       _refreshBadge();
-      if (!data.requests.length) {
-        wrap.innerHTML = `<div class="no-reset-req">요청 없음</div>`;
-        return;
-      }
+      if (!data.requests.length) { wrap.innerHTML = `<div class="no-req">요청 없음</div>`; return; }
       wrap.innerHTML = data.requests.map(r => `
-        <div class="reset-req-row">
-          <div class="reset-req-info">
-            <strong>${r.device_name}</strong>${r.model_name ? ` / ${r.model_name}` : ""}
-            <span style="color:#555;font-size:.74rem;margin-left:6px;">요청: ${r.admin_name || r.admin_id}</span>
-            <span style="color:#888;font-size:.74rem;margin-left:6px;">${r.requested_at}</span>
+        <div class="req-row">
+          <div class="req-info">
+            <strong>${_escapeHtml(r.device_name)}</strong>${r.model_name ? ` / ${_escapeHtml(r.model_name)}` : ""}
+            <span style="color:#555;font-size:.74rem;margin-left:6px;">요청: ${_escapeHtml(r.admin_name || r.admin_id)}</span>
+            <span style="color:#888;font-size:.74rem;margin-left:6px;">${_escapeHtml(r.requested_at)}</span>
           </div>
-          <div class="reset-req-actions">
-            <button class="reset-btn-do"   onclick="approveDeleteDoc('${r.id}','${r.device_name.replace(/'/g,"\\'")}','${(r.model_name||'').replace(/'/g,"\\'")}')">삭제 승인</button>
-            <button class="reset-btn-skip" onclick="dismissDocDeleteRequest('${r.id}')">무시</button>
+          <div class="req-actions">
+            <button class="req-btn-do"   onclick="approveDeleteDoc('${r.id}','${r.device_name.replace(/'/g,"\\'")}','${(r.model_name||'').replace(/'/g,"\\'")}')">삭제 승인</button>
+            <button class="req-btn-skip" onclick="dismissDocDeleteRequest('${r.id}')">무시</button>
           </div>
         </div>`).join("");
-    } catch { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">서버 오류</div>`; }
+    } catch { wrap.innerHTML = `<div class="no-req" style="color:var(--danger)">서버 오류</div>`; }
   }
 
   async function approveDeleteDoc(requestId, deviceName, modelName) {
@@ -1193,21 +1451,18 @@
         headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
-      if (!data.ok) { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">불러오기 실패</div>`; return; }
-      if (!data.questions.length) {
-        wrap.innerHTML = `<div class="no-reset-req">해당 질문 없음</div>`;
-        return;
-      }
+      if (!data.ok) { wrap.innerHTML = `<div class="no-req" style="color:var(--danger)">불러오기 실패</div>`; return; }
+      if (!data.questions.length) { wrap.innerHTML = `<div class="no-req">해당 질문 없음</div>`; return; }
       wrap.innerHTML = data.questions.map(q => `
         <div class="unanswered-row">
           <div class="unanswered-meta">
             <span>${_escapeHtml([q.device_name, q.model_name].filter(Boolean).join(" / ") || "장비 미지정")} · ${_escapeHtml(q.ts)}</span>
-            <button class="reset-btn-skip" onclick="dismissUnansweredQuestion('${q.id}')">확인 완료</button>
+            <button class="req-btn-skip" onclick="dismissUnansweredQuestion('${q.id}')">확인 완료</button>
           </div>
           <div class="unanswered-q">Q. ${_escapeHtml(q.question)}</div>
           <div class="unanswered-a">A. ${_escapeHtml(q.answer)}</div>
         </div>`).join("");
-    } catch { wrap.innerHTML = `<div class="no-reset-req" style="color:#c00">서버 오류</div>`; }
+    } catch { wrap.innerHTML = `<div class="no-req" style="color:var(--danger)">서버 오류</div>`; }
   }
 
   async function dismissUnansweredQuestion(qid) {
@@ -1229,127 +1484,23 @@
         headers: { "X-Admin-Token": adminToken },
       });
       const data = await res.json();
-      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">불러오기 실패</td></tr>`; return; }
+      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger)">불러오기 실패</td></tr>`; return; }
       if (!data.log.length) {
         tbody.innerHTML = `<tr><td colspan="5" style="color:#aaa;text-align:center;padding:16px">활동 기록이 없습니다.</td></tr>`;
         return;
       }
       tbody.innerHTML = data.log.map(e => `
         <tr>
-          <td>${e.ts}</td>
-          <td>${e.admin_id}${e.name ? ` (${e.name})` : ""}</td>
-          <td>${e.tab}</td>
-          <td>${e.action}</td>
-          <td style="color:#555">${e.detail || "—"}</td>
+          <td>${_escapeHtml(e.ts)}</td>
+          <td>${_escapeHtml(e.admin_id)}${e.name ? ` (${_escapeHtml(e.name)})` : ""}</td>
+          <td>${_escapeHtml(e.tab)}</td>
+          <td>${_escapeHtml(e.action)}</td>
+          <td style="color:#555">${_escapeHtml(e.detail || "—")}</td>
         </tr>`).join("");
     } catch {
-      tbody.innerHTML = `<tr><td colspan="5" style="color:#c00">서버 오류</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger)">서버 오류</td></tr>`;
     }
   }
-
-  async function removeAdmin(adminId) {
-    if (!confirm(`사번 ${adminId} 관리자를 삭제할까요?`)) return;
-    try {
-      const res  = await fetch(`${BE}/api/admin/users/${encodeURIComponent(adminId)}`, {
-        method: "DELETE", headers: { "X-Admin-Token": adminToken },
-      });
-      const data = await res.json();
-      if (data.ok) { await loadUserList(); }
-      else alert(data.error || "삭제 실패");
-    } catch { alert("서버 오류"); }
-  }
-
-  async function changeMyPassword() {
-    const cur  = document.getElementById("pw-current").value;
-    const nw   = document.getElementById("pw-new").value;
-    const nw2  = document.getElementById("pw-new2").value;
-    const msg  = document.getElementById("pw-change-msg");
-    if (!cur || !nw || !nw2) { msg.style.color = "#c00"; msg.textContent = "모든 항목을 입력해 주세요."; return; }
-    if (nw !== nw2)           { msg.style.color = "#c00"; msg.textContent = "새 비밀번호가 일치하지 않습니다."; return; }
-    msg.style.color = "#555"; msg.textContent = "변경 중…";
-    try {
-      const res  = await fetch(`${BE}/api/admin/change-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": adminToken },
-        body: JSON.stringify({ current_password: cur, new_password: nw }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        msg.style.color = "#0a7a0a"; msg.textContent = "✅ 비밀번호가 변경되었습니다.";
-        document.getElementById("pw-current").value = "";
-        document.getElementById("pw-new").value     = "";
-        document.getElementById("pw-new2").value    = "";
-      } else { msg.style.color = "#c00"; msg.textContent = data.error || "변경 실패"; }
-    } catch { msg.style.color = "#c00"; msg.textContent = "서버 오류"; }
-  }
-</script>
-
-<script>
-/* 외부 인증 위젯 로그아웃 바 → 우측 상단 소형 버튼으로 재배치 */
-(function () {
-  var _moved = false;
-
-  function _styleBar(el) {
-    if (_moved) return;
-    _moved = true;
-    /* 위젯 바 원본 스타일 초기화 후 우측 상단 고정 */
-    el.removeAttribute('style');
-    Object.assign(el.style, {
-      position:     'fixed',
-      top:          '10px',
-      right:        '14px',
-      left:         'auto',
-      bottom:       'auto',
-      width:        'auto',
-      maxWidth:     '180px',
-      zIndex:       '10001',
-      borderRadius: '8px',
-      boxShadow:    '0 2px 10px rgba(0,0,0,.30)',
-      fontSize:     '.82rem',
-      padding:      '0',
-    });
-    /* 위젯 바 내부 버튼도 compact하게 */
-    el.querySelectorAll('button, a[role="button"]').forEach(function(btn) {
-      Object.assign(btn.style, {
-        padding:   '6px 14px',
-        fontSize:  '.82rem',
-        minWidth:  '0',
-        width:     'auto',
-      });
-    });
-  }
-
-  function _findAndMove() {
-    /* body의 직계 자식 중 "로그아웃" 텍스트가 포함된 새 요소 탐색 */
-    document.querySelectorAll('body > *').forEach(function(el) {
-      if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
-      /* 우리 앱의 기존 요소는 id/class 있음, 위젯 바는 대부분 id="auth-*" 또는 무명 */
-      var txt = el.textContent || '';
-      if (txt.includes('로그아웃') && !el.closest('#modal-backdrop')) {
-        _styleBar(el);
-      }
-    });
-  }
-
-  /* DOM 변화 감시 — 위젯이 나중에 삽입될 때 대응 */
-  var obs = new MutationObserver(function(mutations) {
-    mutations.forEach(function(m) {
-      m.addedNodes.forEach(function(node) {
-        if (node.nodeType !== 1) return;
-        var txt = node.textContent || '';
-        if (txt.includes('로그아웃') && !node.closest('#modal-backdrop')) {
-          setTimeout(function() { _styleBar(node); }, 50);
-        }
-      });
-    });
-  });
-  obs.observe(document.body, { childList: true });
-
-  /* 이미 삽입된 경우(스크립트 로드 시점 차이) 즉시 처리 */
-  document.addEventListener('DOMContentLoaded', _findAndMove);
-  window.addEventListener('load', _findAndMove);
-  setTimeout(_findAndMove, 800);
-})();
 </script>
 </body>
 </html>
