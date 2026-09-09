@@ -49,12 +49,13 @@ _doc_embeddings: np.ndarray | None = None   # shape (N, D)
 
 # ── 업로드된 구조화 자료 (엑셀 표준 양식 → 행 단위 저장, 디스크 영구 저장) ──
 # key = "장비명|모델명"  (빈 값이면 "default")
-# 각 행: {"category": str, "title": str, "content": str, "page": str}
+# 각 행: {"symptom": str, "cause": str, "solution": str, "note": str}
 _DATA_DIR  = _pathlib.Path(__file__).parent / "data"
 _DOCS_FILE = _DATA_DIR / "user_docs.json"
 _DATA_DIR.mkdir(exist_ok=True)
 
-DOC_COLUMNS = ["분류", "제목", "내용", "참고페이지"]
+DOC_COLUMNS = ["증상", "원인", "해결방법", "비고"]
+DOC_SHEET_NAME = "메뉴얼"
 
 def _load_user_docs() -> dict[str, list[dict]]:
     if _DOCS_FILE.exists():
@@ -234,12 +235,15 @@ def _get_all_docs() -> list[dict]:
     return result
 
 def _doc_to_text(row: dict) -> str:
-    """구조화된 행 → 임베딩·LLM 컨텍스트용 텍스트."""
-    cat = row.get("category", "")
-    title = row.get("title", "")
-    content = row.get("content", "")
-    head = f"[{cat}] {title}" if cat else title
-    return f"{head}\n{content}" if head else content
+    """구조화된 행(증상/원인/해결방법/비고) → 임베딩·LLM 컨텍스트용 텍스트."""
+    symptom  = row.get("symptom", "")
+    cause    = row.get("cause", "")
+    solution = row.get("solution", "")
+    body_parts = []
+    if cause:    body_parts.append(f"원인: {cause}")
+    if solution: body_parts.append(f"해결방법: {solution}")
+    body = "\n".join(body_parts)
+    return f"{symptom}\n{body}" if symptom else body
 
 def _device_key(device_name: str, model_name: str) -> str:
     return f"{device_name.strip()}|{model_name.strip()}"
@@ -365,7 +369,7 @@ async def retrieve(
             break
 
     chunks  = [_doc_to_text(all_docs[i]) for i in selected]
-    sources = [{"title": all_docs[i].get("title", ""), "page": all_docs[i].get("page", "")} for i in selected]
+    sources = [{"title": all_docs[i].get("symptom", ""), "page": all_docs[i].get("note", "")} for i in selected]
     return chunks, sources
 
 
@@ -831,7 +835,7 @@ async def dismiss_unanswered_question(qid: str, request: Request):
 
 # ── 엑셀 표준 양식 업로드/다운로드 ────────────────────────────────────
 def _parse_excel_docs(xlsx_bytes: bytes) -> list[dict]:
-    """표준 양식(분류/제목/내용/참고페이지) 엑셀 → 행 리스트."""
+    """표준 양식(증상/원인/해결방법/비고) 엑셀 → 행 리스트."""
     if not _XLSX_OK:
         raise RuntimeError("openpyxl 패키지가 설치되지 않았습니다: pip install openpyxl")
     wb = _openpyxl.load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
@@ -845,13 +849,13 @@ def _parse_excel_docs(xlsx_bytes: bytes) -> list[dict]:
                 return headers.index(name)
         return None
 
-    idx_cat  = _col("분류", "카테고리")
-    idx_title = _col("제목")
-    idx_content = _col("내용", "본문")
-    idx_page = _col("참고페이지", "페이지")
+    idx_symptom = _col("증상")
+    idx_cause   = _col("원인")
+    idx_solution = _col("해결방법", "해결 방법")
+    idx_note    = _col("비고")
 
-    if idx_title is None or idx_content is None:
-        raise RuntimeError("표준 양식이 아닙니다. '제목', '내용' 열이 반드시 있어야 합니다. (표준 양식 다운로드 버튼을 이용해 주세요)")
+    if idx_symptom is None or idx_solution is None:
+        raise RuntimeError("표준 양식이 아닙니다. '증상', '해결방법' 열이 반드시 있어야 합니다. (표준 양식 다운로드 버튼을 이용해 주세요)")
 
     rows: list[dict] = []
     for raw in ws.iter_rows(min_row=2, values_only=True):
@@ -859,15 +863,15 @@ def _parse_excel_docs(xlsx_bytes: bytes) -> list[dict]:
             if i is None or i >= len(raw) or raw[i] is None:
                 return ""
             return str(raw[i]).strip()
-        title = _cell(idx_title)
-        content = _cell(idx_content)
-        if not title and not content:
+        symptom  = _cell(idx_symptom)
+        solution = _cell(idx_solution)
+        if not symptom and not solution:
             continue
         rows.append({
-            "category": _cell(idx_cat),
-            "title":    title,
-            "content":  content,
-            "page":     _cell(idx_page),
+            "symptom":  symptom,
+            "cause":    _cell(idx_cause),
+            "solution": solution,
+            "note":     _cell(idx_note),
         })
     wb.close()
     return rows
@@ -877,11 +881,11 @@ def _build_docs_workbook(rows: list[dict]):
     """행 리스트 → openpyxl Workbook (표준 양식 컬럼)."""
     wb = _openpyxl.Workbook()
     ws = wb.active
-    ws.title = "매뉴얼"
+    ws.title = DOC_SHEET_NAME
     ws.append(DOC_COLUMNS)
     for row in rows:
-        ws.append([row.get("category", ""), row.get("title", ""), row.get("content", ""), row.get("page", "")])
-    widths = [14, 28, 60, 12]
+        ws.append([row.get("symptom", ""), row.get("cause", ""), row.get("solution", ""), row.get("note", "")])
+    widths = [28, 28, 50, 20]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
     return wb
@@ -946,7 +950,7 @@ async def upload_docs(
         return {"ok": False, "error": f"파일 파싱 오류: {e}"}
 
     if not rows:
-        return {"ok": False, "error": "엑셀에서 유효한 행을 찾을 수 없습니다. '제목' 또는 '내용'이 채워진 행이 필요합니다."}
+        return {"ok": False, "error": "엑셀에서 유효한 행을 찾을 수 없습니다. '증상' 또는 '해결방법'이 채워진 행이 필요합니다."}
 
     key = _device_key(device_name, model_name) or "default"
     _user_docs[key] = rows
@@ -965,7 +969,7 @@ async def upload_docs(
         "device_name": device_name,
         "model_name": model_name,
         "rows_extracted": len(rows),
-        "preview": [f"[{r['category']}] {r['title']}" if r['category'] else r['title'] for r in rows[:3]],
+        "preview": [f"{r['symptom']} → {r['solution']}" for r in rows[:3]],
     }
 
 

@@ -430,7 +430,7 @@
            ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
         <div class="drop-icon">📊</div>
         <p><strong>클릭하거나 엑셀 파일을 드래그해서 업로드</strong></p>
-        <small>표준 양식(분류 · 제목 · 내용 · 참고페이지)에 맞춰 작성된 .xlsx 파일만 업로드할 수 있습니다</small>
+        <small>표준 양식(증상 · 원인 · 해결방법 · 비고)에 맞춰 작성된 .xlsx 파일만 업로드할 수 있습니다</small>
       </div>
       <input type="file" id="xlsx-input" accept=".xlsx" style="display:none" onchange="onFileSelected(this)" />
       <div id="selected-file" class="selected-file"></div>
@@ -460,18 +460,25 @@
       <div class="card-label" style="color:var(--warn);">📌 표준 양식 안내</div>
       <ul style="font-size:.82rem; line-height:2; color:#555; padding-left:1.2em;">
         <li>PDF·Word는 더 이상 지원하지 않습니다. 매뉴얼 내용을 아래 표 형식의 <strong>엑셀(.xlsx)</strong>로 정리해 업로드해 주세요.</li>
-        <li><strong>제목</strong>·<strong>내용</strong> 열은 필수, <strong>분류</strong>·<strong>참고페이지</strong>는 선택입니다.</li>
+        <li><strong>증상</strong>·<strong>해결방법</strong> 열은 필수, <strong>원인</strong>·<strong>비고</strong>는 선택입니다.</li>
         <li>장비명·모델명을 입력하면 해당 장비로 태깅되어 <strong>장비별 검색</strong>에 활용됩니다.</li>
         <li>같은 장비/모델로 재업로드하면 이전 자료가 <strong>전체 교체</strong>됩니다.</li>
         <li>답변을 찾지 못한 질문은 설정 → "답변을 찾지 못한 질문"에서 확인 후, 아래 <strong>다운로드</strong> 버튼으로 현재 자료를 받아 보강·재업로드하세요.</li>
       </ul>
       <table class="template-table">
-        <thead><tr><th>분류</th><th>제목</th><th>내용</th><th>참고페이지</th></tr></thead>
+        <thead><tr><th>증상</th><th>원인</th><th>해결방법</th><th>비고</th></tr></thead>
         <tbody>
           <tr>
-            <td>알람</td><td>AL-OCC 폐색 알람</td>
-            <td>1) 증상: 튜빙 폐색 시 경보 발생&#10;2) 점검: 라인 꺾임·클램프 확인&#10;3) 조치: 폐색 해제 후 리셋</td>
-            <td>p.12</td>
+            <td>전원이 켜지지 않음</td>
+            <td>전원 케이블 접촉 불량</td>
+            <td>전원 케이블을 재연결하고 콘센트 통전 여부를 확인 후 재부팅합니다.</td>
+            <td>메뉴얼 12페이지 참고</td>
+          </tr>
+          <tr>
+            <td>화면에 에러 코드 E-01 표시</td>
+            <td>센서 캘리브레이션 오류</td>
+            <td>설정 메뉴에서 센서 캘리브레이션을 재실행합니다.</td>
+            <td></td>
           </tr>
         </tbody>
       </table>
